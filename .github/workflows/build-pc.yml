@@ -8,7 +8,10 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
     permissions:
       contents: write
 
@@ -32,9 +35,16 @@ jobs:
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
 
       - name: Build Windows Executable
-        run: npm run build
+        if: matrix.os == 'windows-latest'
+        run: npx electron-builder --win
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for electron-builder
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build macOS App
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
@@ -43,6 +53,8 @@ jobs:
           name: Release v1.0.${{ github.run_number }}
           files: |
             dist/*.exe
+            dist/*.dmg
+            dist/*.zip
             dist/*.yml
             dist/*.blockmap
           generate_release_notes: true
