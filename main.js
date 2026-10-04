@@ -301,8 +301,8 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
     socket.disconnect();
   }
 
-  // Determine WSS URL: use env var if set, otherwise fall back to localhost for dev
-  const wssUrl = process.env.WSS_URL || 'http://localhost:3001';
+  // Determine WSS URL: use env var if set, otherwise fall back to production URL
+  const wssUrl = process.env.WSS_URL || 'https://funprinting-wss.onrender.com';
   console.log(`Connecting to WebSocket server at ${wssUrl}`);
 
   // Connect to the WebSocket Server with reconnection settings
