@@ -26,6 +26,7 @@
   "build": {
     "appId": "com.funprinting.partner",
     "productName": "FunPrinting Partner",
+    "artifactName": "FunPrinting-Partner-Setup-${version}.${ext}",
     "publish": [
       {
         "provider": "github",
