@@ -102,6 +102,17 @@
           </div>
         </div>
       </div>
+
+      <!-- App Settings -->
+      <div class="glass-panel rounded-xl p-6 shadow-xl">
+        <h2 class="text-lg font-bold mb-4">System Settings</h2>
+        <div class="space-y-4">
+          <button id="check-update-btn" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 border border-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span id="update-btn-text">Check for Updates</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Right Column: Print Queue & AIMD Monitoring -->
@@ -135,6 +146,17 @@
     const loginBtn = document.getElementById('login-btn');
     const statusBadge = document.getElementById('status-badge');
     const queueContainer = document.getElementById('queue-container');
+    const checkUpdateBtn = document.getElementById('check-update-btn');
+    const updateBtnText = document.getElementById('update-btn-text');
+
+    // Handle Updates
+    checkUpdateBtn.addEventListener('click', () => {
+      window.electronAPI.checkUpdates();
+    });
+
+    window.electronAPI.onUpdateMessage((msg) => {
+      updateBtnText.innerText = msg;
+    });
 
     // Handle Login
     loginBtn.addEventListener('click', () => {

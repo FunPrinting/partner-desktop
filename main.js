@@ -4,6 +4,12 @@ const fs = require('fs');
 const http = require('http');
 const { io } = require('socket.io-client');
 const { PDFDocument } = require('pdf-lib');
+const { autoUpdater } = require('electron-updater');
+
+// Configure Auto Updater
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
 // NOTE: node-printer or edge-js would be used here in production for raw hardware access.
 // For this environment, we simulate printer commands.
 
@@ -187,6 +193,36 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Auto Updater Events
+ipcMain.on('check-updates', () => {
+  mainWindow.webContents.send('update-message', 'Checking for updates...');
+  autoUpdater.checkForUpdatesAndNotify();
+});
+
+autoUpdater.on('update-available', () => {
+  mainWindow.webContents.send('update-message', 'Update available. Downloading...');
+});
+
+autoUpdater.on('update-not-available', () => {
+  mainWindow.webContents.send('update-message', 'App is up to date.');
+});
+
+autoUpdater.on('error', (err) => {
+  mainWindow.webContents.send('update-message', `Update error: ${err.message}`);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  let log_message = `Downloading... ${Math.round(progressObj.percent)}%`;
+  mainWindow.webContents.send('update-message', log_message);
+});
+
+autoUpdater.on('update-downloaded', () => {
+  mainWindow.webContents.send('update-message', 'Update downloaded. Restarting...');
+  setTimeout(() => {
+    autoUpdater.quitAndInstall();
+  }, 2000);
 });
 
 // IPC Communication (UI <-> Main Process)

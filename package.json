@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "pdf-lib": "^1.17.1",
     "socket.io-client": "^4.8.4"
   },
@@ -25,6 +26,13 @@
   "build": {
     "appId": "com.funprinting.partner",
     "productName": "FunPrinting Partner",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "FunPrinting",
+        "repo": "partner-desktop"
+      }
+    ],
     "directories": {
       "output": "dist"
     },
