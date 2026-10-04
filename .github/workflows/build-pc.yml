@@ -12,7 +12,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: partner-app
+        working-directory: .
 
     steps:
       - name: Checkout Code
@@ -34,5 +34,7 @@ jobs:
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: partner-app/dist/*.exe
+          tag_name: latest
+          name: Latest Release
+          files: dist/*.exe
           generate_release_notes: true
