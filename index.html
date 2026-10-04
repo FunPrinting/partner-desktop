@@ -78,28 +78,12 @@
 
       <!-- Hardware Status -->
       <div class="glass-panel rounded-xl p-6 shadow-xl">
-        <h2 class="text-lg font-bold mb-4">Detected Printers</h2>
-        <div class="space-y-3">
-          <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-            <div class="flex items-center gap-3">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-              <div>
-                <p class="font-medium text-sm">HP LaserJet Pro</p>
-                <p class="text-xs text-green-400">Ready</p>
-              </div>
-            </div>
-            <div class="w-3 h-3 rounded-full bg-green-500"></div>
-          </div>
-          <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700 opacity-50">
-            <div class="flex items-center gap-3">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-              <div>
-                <p class="font-medium text-sm">Epson L3150 (WiFi)</p>
-                <p class="text-xs text-red-400">Offline</p>
-              </div>
-            </div>
-            <div class="w-3 h-3 rounded-full bg-red-500"></div>
-          </div>
+        <h2 class="text-lg font-bold mb-4 flex justify-between items-center">
+          Detected Printers
+          <button onclick="loadPrinters()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
+        </h2>
+        <div id="printers-list" class="space-y-3">
+          <div class="text-sm text-gray-500 text-center py-2">Loading printers...</div>
         </div>
       </div>
 
@@ -107,6 +91,10 @@
       <div class="glass-panel rounded-xl p-6 shadow-xl">
         <h2 class="text-lg font-bold mb-4">System Settings</h2>
         <div class="space-y-4">
+          <button id="open-settings-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Manage Shop Profile
+          </button>
           <button id="check-update-btn" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 border border-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span id="update-btn-text">Check for Updates</span>
@@ -379,6 +367,55 @@
         }
       }
     });
+    // Settings Button
+    document.getElementById('open-settings-btn').addEventListener('click', () => {
+      // Use standard window.open, which Electron normally intercepts and opens in default system browser
+      window.open('https://www.funprinting.store/partner/settings', '_blank');
+    });
+
+    // Printer Detection
+    async function loadPrinters() {
+      const listEl = document.getElementById('printers-list');
+      if (!listEl) return;
+      
+      listEl.innerHTML = '<div class="text-sm text-gray-500 text-center py-2">Scanning printers...</div>';
+      
+      try {
+        const printers = await window.electronAPI.getPrinters();
+        listEl.innerHTML = '';
+        
+        if (!printers || printers.length === 0) {
+          listEl.innerHTML = '<div class="text-sm text-red-400 text-center py-2">No printers found on this system.</div>';
+          return;
+        }
+
+        printers.forEach(printer => {
+          const isDefault = printer.isDefault ? '<span class="px-1.5 py-0.5 text-[10px] bg-indigo-900/50 text-indigo-300 rounded ml-2 border border-indigo-700">Default</span>' : '';
+          const statusText = printer.status !== 0 ? 'Error/Offline' : 'Ready';
+          const statusColor = printer.status !== 0 ? 'text-red-400' : 'text-green-400';
+          const dotColor = printer.status !== 0 ? 'bg-red-500' : 'bg-green-500';
+          
+          listEl.innerHTML += `
+            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700 ${printer.status !== 0 ? 'opacity-60' : ''}">
+              <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <div class="overflow-hidden">
+                  <p class="font-medium text-sm truncate" title="${printer.name}">${printer.name}${isDefault}</p>
+                  <p class="text-xs ${statusColor}">${statusText}</p>
+                </div>
+              </div>
+              <div class="w-3 h-3 rounded-full ${dotColor} shrink-0"></div>
+            </div>
+          `;
+        });
+      } catch (err) {
+        console.error(err);
+        listEl.innerHTML = '<div class="text-sm text-red-400 text-center py-2">Failed to scan printers.</div>';
+      }
+    }
+
+    // Load printers on startup
+    loadPrinters();
   </script>
 </body>
 </html>

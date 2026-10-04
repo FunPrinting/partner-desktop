@@ -226,6 +226,13 @@ autoUpdater.on('update-downloaded', () => {
 });
 
 // IPC Communication (UI <-> Main Process)
+ipcMain.handle('get-printers', async () => {
+  if (mainWindow) {
+    return await mainWindow.webContents.getPrintersAsync();
+  }
+  return [];
+});
+
 ipcMain.on('start-oauth', () => {
   if (oauthServer) {
     oauthServer.close();
