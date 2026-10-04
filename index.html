@@ -170,6 +170,33 @@
       window.electronAPI.login({ partnerId, token });
     });
 
+    // Handle successful authentication (separate from WSS connection)
+    let isAuthenticated = false;
+    window.electronAPI.onAuthSuccess(({ partnerId }) => {
+      isAuthenticated = true;
+      statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-800/50 text-sm font-medium transition-colors";
+      statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Authenticated';
+      loginBtn.innerText = "Authenticated ✓";
+      loginBtn.disabled = true;
+      loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      // Fetch financials immediately after auth
+      const token = document.getElementById('access-token').value;
+      fetch('https://www.funprinting.store/api/partner/financials', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(resData => {
+        if(resData.success && resData.financials) {
+          document.getElementById('financials-panel').classList.remove('hidden');
+          document.getElementById('today-earnings').innerText = `₹${resData.financials.todayEarnings.toLocaleString()}`;
+          document.getElementById('total-earnings').innerText = `₹${resData.financials.totalEarnings.toLocaleString()}`;
+          document.getElementById('total-orders').innerText = resData.financials.completedOrdersCount;
+        }
+      })
+      .catch(err => console.error("Failed to fetch financials:", err));
+    });
+
     // Handle Cloud Connection Status
     const engineSelect = document.getElementById('print-engine');
     engineSelect.addEventListener('change', (e) => {
@@ -186,7 +213,7 @@
         loginBtn.disabled = true;
         loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Phase 5: Fetch Financials
+        // Fetch Financials on WSS connect too
         const token = document.getElementById('access-token').value;
         fetch('https://www.funprinting.store/api/partner/financials', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -203,11 +230,20 @@
         .catch(err => console.error("Failed to fetch financials:", err));
 
       } else {
-        statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/50 text-red-400 border border-red-800/50 text-sm font-medium transition-colors";
-        statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline';
-        loginBtn.innerText = "Connect Engine";
-        loginBtn.disabled = false;
-        loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        // If authenticated, show a softer "engine offline" state instead of fully resetting
+        if (isAuthenticated) {
+          statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-800/50 text-sm font-medium transition-colors";
+          statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Engine Connecting...';
+          loginBtn.innerText = "Authenticated ✓";
+          loginBtn.disabled = true;
+          loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/50 text-red-400 border border-red-800/50 text-sm font-medium transition-colors";
+          statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline';
+          loginBtn.innerText = "Connect Engine";
+          loginBtn.disabled = false;
+          loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
       }
     });
 

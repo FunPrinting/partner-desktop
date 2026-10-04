@@ -294,13 +294,25 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   console.log('Authenticating with Cloud Engine...', partnerId);
   token = authToken; // Store in global for REST requests
   
+  // Immediately notify UI that authentication succeeded
+  mainWindow.webContents.send('auth-success', { partnerId });
+  
   if (socket) {
     socket.disconnect();
   }
 
-  // Connect to the Phase 5 WebSocket Server
-  socket = io('http://localhost:3001', {
-    auth: { token }
+  // Determine WSS URL: use env var if set, otherwise fall back to localhost for dev
+  const wssUrl = process.env.WSS_URL || 'http://localhost:3001';
+  console.log(`Connecting to WebSocket server at ${wssUrl}`);
+
+  // Connect to the WebSocket Server with reconnection settings
+  socket = io(wssUrl, {
+    auth: { token },
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 30000,
+    timeout: 10000
   });
 
   socket.on('connect', () => {
@@ -312,6 +324,7 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   socket.off('new_print_job');
   socket.off('connect_error');
   socket.off('remote_control_action');
+  socket.off('reconnect_failed');
 
   socket.on('new_print_job', async (job) => {
     console.log('📥 New Print Job Received:', job.jobId);
@@ -326,7 +339,12 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
 
   socket.on('connect_error', (err) => {
     console.log('🔴 Connection Error:', err.message);
-    mainWindow.webContents.send('status', { connected: false, message: `Error: ${err.message}` });
+    mainWindow.webContents.send('status', { connected: false, message: `Engine offline. Retrying... (${err.message})` });
+  });
+
+  socket.on('reconnect_failed', () => {
+    console.log('🔴 All reconnection attempts exhausted');
+    mainWindow.webContents.send('status', { connected: false, message: 'Engine unreachable. Click Reconnect to try again.' });
   });
 
   // Phase 5: Remote Control (Listen for Mobile App commands)

@@ -11,5 +11,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOAuthSuccess: (callback) => ipcRenderer.on('oauth-success', (_event, data) => callback(data)),
   checkUpdates: () => ipcRenderer.send('check-updates'),
   onUpdateMessage: (callback) => ipcRenderer.on('update-message', (_event, data) => callback(data)),
-  setPrintEngine: (engine) => ipcRenderer.send('set_engine', engine)
+  setPrintEngine: (engine) => ipcRenderer.send('set_engine', engine),
+  onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data))
 });
