@@ -129,6 +129,48 @@
     </div>
   </main>
 
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+    <div class="glass-panel rounded-2xl w-[500px] max-w-[90vw] max-h-[90vh] flex flex-col shadow-2xl border border-gray-600/50">
+      <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
+        <h2 class="text-xl font-bold">Manage Shop Profile</h2>
+        <button id="close-settings-btn" class="text-gray-400 hover:text-white transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+        <form id="settings-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Business Name</label>
+            <input type="text" id="set-business-name" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="e.g. Rahul's Cyber Cafe">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Street Address</label>
+            <input type="text" id="set-street" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="123 Main St">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-1">City</label>
+              <input type="text" id="set-city" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="Delhi">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-1">State</label>
+              <input type="text" id="set-state" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="DL">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">ZIP / Pincode</label>
+            <input type="text" id="set-zip" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="110001">
+          </div>
+        </form>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-700 bg-gray-800/80 rounded-b-2xl flex justify-end gap-3">
+        <button id="cancel-settings-btn" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors">Cancel</button>
+        <button id="save-settings-btn" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // UI Elements
     const loginBtn = document.getElementById('login-btn');
@@ -367,10 +409,82 @@
         }
       }
     });
-    // Settings Button
-    document.getElementById('open-settings-btn').addEventListener('click', () => {
-      // Open the partner dashboard where they can manage their profile
-      window.open('https://www.funprinting.store/partner/dashboard', '_blank');
+    // Settings Modal Logic
+    const settingsModal = document.getElementById('settings-modal');
+    
+    document.getElementById('open-settings-btn').addEventListener('click', async () => {
+      const token = document.getElementById('access-token').value;
+      if (!token) {
+        alert("Please sign in first.");
+        return;
+      }
+      
+      // Fetch current profile
+      document.getElementById('open-settings-btn').innerHTML = 'Loading...';
+      try {
+        const res = await fetch('https://funprinting-web.vercel.app/api/partner/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.partner) {
+          document.getElementById('set-business-name').value = data.partner.businessName || '';
+          if (data.partner.address) {
+            document.getElementById('set-street').value = data.partner.address.street || '';
+            document.getElementById('set-city').value = data.partner.address.city || '';
+            document.getElementById('set-state').value = data.partner.address.state || '';
+            document.getElementById('set-zip').value = data.partner.address.zipCode || '';
+          }
+        }
+        
+        settingsModal.classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load profile data");
+      }
+      document.getElementById('open-settings-btn').innerHTML = 'Manage Shop Profile';
+    });
+
+    const closeSettings = () => settingsModal.classList.add('hidden');
+    document.getElementById('close-settings-btn').addEventListener('click', closeSettings);
+    document.getElementById('cancel-settings-btn').addEventListener('click', closeSettings);
+
+    document.getElementById('save-settings-btn').addEventListener('click', async () => {
+      const token = document.getElementById('access-token').value;
+      const saveBtn = document.getElementById('save-settings-btn');
+      
+      const payload = {
+        businessName: document.getElementById('set-business-name').value,
+        address: {
+          street: document.getElementById('set-street').value,
+          city: document.getElementById('set-city').value,
+          state: document.getElementById('set-state').value,
+          zipCode: document.getElementById('set-zip').value
+        }
+      };
+
+      saveBtn.innerText = 'Saving...';
+      saveBtn.disabled = true;
+
+      try {
+        const res = await fetch('https://funprinting-web.vercel.app/api/partner/profile', {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeSettings();
+        } else {
+          alert('Failed to save profile: ' + data.error);
+        }
+      } catch (err) {
+        alert('Failed to connect to server.');
+      }
+      saveBtn.innerText = 'Save Profile';
+      saveBtn.disabled = false;
     });
 
     // Printer Detection
