@@ -232,6 +232,9 @@ ipcMain.on('start-oauth', () => {
   }
 
   oauthServer = http.createServer((req, res) => {
+    // Add basic CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
     const url = new URL(req.url, 'http://localhost:4321');
     if (url.pathname === '/callback') {
       const partnerId = url.searchParams.get('partnerId');
@@ -250,14 +253,21 @@ ipcMain.on('start-oauth', () => {
           mainWindow.focus();
         }
         
-        if (oauthServer) {
-          oauthServer.close();
-          oauthServer = null;
-        }
+        // Schedule server shutdown gracefully after giving the browser time to receive the HTML
+        setTimeout(() => {
+          if (oauthServer) {
+            oauthServer.close();
+            oauthServer = null;
+          }
+        }, 1500);
       } else {
         res.writeHead(400);
         res.end('Authentication failed: Missing token');
       }
+    } else {
+      // Immediately return 404 for ghost requests like /favicon.ico to prevent hanging connections
+      res.writeHead(404);
+      res.end('Not Found');
     }
   });
 
