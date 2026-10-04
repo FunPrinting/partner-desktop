@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { io } = require('socket.io-client');
 const { PDFDocument } = require('pdf-lib');
 // NOTE: node-printer or edge-js would be used here in production for raw hardware access.
@@ -9,6 +10,8 @@ const { PDFDocument } = require('pdf-lib');
 let mainWindow;
 let socket;
 let token; // For storing auth token
+
+let oauthServer = null; // Store local oauth server
 
 let selectedPrintEngine = 'native'; // Default
 
@@ -186,8 +189,43 @@ app.on('window-all-closed', function () {
 });
 
 // IPC Communication (UI <-> Main Process)
-ipcMain.on('login', (event, { token, partnerId }) => {
+ipcMain.on('start-oauth', () => {
+  if (oauthServer) {
+    oauthServer.close();
+  }
+
+  oauthServer = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost:4321');
+    if (url.pathname === '/callback') {
+      const partnerId = url.searchParams.get('partnerId');
+      const authToken = url.searchParams.get('token');
+      
+      if (partnerId && authToken) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<html><body style="background:#111827;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;"><h2>Authentication successful! You can close this window.</h2><script>window.close()</script></body></html>');
+        
+        mainWindow.webContents.send('oauth-success', { partnerId, token: authToken });
+        
+        oauthServer.close();
+        oauthServer = null;
+      } else {
+        res.writeHead(400);
+        res.end('Authentication failed: Missing token');
+      }
+    }
+  });
+
+  oauthServer.listen(4321, () => {
+    console.log('Started local OAuth callback server on port 4321');
+    // Use the production web app for authentication
+    const webUrl = 'https://www.funprinting.store/partner/desktop-auth?callback=http://localhost:4321/callback';
+    shell.openExternal(webUrl);
+  });
+});
+
+ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   console.log('Authenticating with Cloud Engine...', partnerId);
+  token = authToken; // Store in global for REST requests
   
   if (socket) {
     socket.disconnect();

@@ -7,5 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onPrintStatus: (callback) => ipcRenderer.on('print_status', (_event, data) => callback(data)),
   updateOrderStatus: (jobId, status) => ipcRenderer.invoke('update_order_status', { jobId, status }),
   resumePrint: (jobId) => ipcRenderer.send('resume_print', { jobId }),
+  startOAuth: () => ipcRenderer.send('start-oauth'),
+  onOAuthSuccess: (callback) => ipcRenderer.on('oauth-success', (_event, data) => callback(data)),
   setPrintEngine: (engine) => ipcRenderer.send('set_engine', engine)
 });
