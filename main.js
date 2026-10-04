@@ -250,8 +250,10 @@ ipcMain.on('start-oauth', () => {
           mainWindow.focus();
         }
         
-        oauthServer.close();
-        oauthServer = null;
+        if (oauthServer) {
+          oauthServer.close();
+          oauthServer = null;
+        }
       } else {
         res.writeHead(400);
         res.end('Authentication failed: Missing token');
