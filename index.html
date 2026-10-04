@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FunPrinting - Partner Desktop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass-panel {
+      background: rgba(31, 41, 55, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(75, 85, 99, 0.4);
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white h-screen overflow-hidden flex flex-col">
+  
+  <!-- Header -->
+  <header class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center shrink-0 shadow-md z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded bg-indigo-500 flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-500/30">FP</div>
+      <h1 class="text-xl font-bold tracking-tight">Partner Console</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <div id="status-badge" class="flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/50 text-red-400 border border-red-800/50 text-sm font-medium transition-colors">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+        Offline
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex overflow-hidden">
+    
+    <!-- Left Column: Login & System Status -->
+    <div class="w-1/3 p-6 flex flex-col gap-6 border-r border-gray-800 overflow-y-auto custom-scrollbar">
+      
+      <!-- Login Panel -->
+      <div id="login-panel" class="glass-panel rounded-xl p-6 shadow-xl">
+        <h2 class="text-lg font-bold mb-4">Authenticate Hardware</h2>
+        <p class="text-sm text-gray-400 mb-5">Connect this machine to your FunPrinting cloud account to begin receiving jobs.</p>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Partner ID</label>
+            <input type="text" id="partner-id" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="e.g. 64a1b2...">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Access Token</label>
+            <input type="password" id="access-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="JWT Token">
+          </div>
+          <button id="login-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg shadow-indigo-600/20">
+            Connect Engine
+          </button>
+        </div>
+      </div>
+
+      <!-- Phase 5: Financials Dashboard -->
+      <div id="financials-panel" class="glass-panel rounded-xl p-6 shadow-xl hidden">
+        <h2 class="text-lg font-bold mb-4 text-green-400 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Today's Earnings
+        </h2>
+        <div class="mb-4">
+          <p class="text-sm text-gray-400">90% Partner Split</p>
+          <p id="today-earnings" class="text-3xl font-bold text-white">₹0</p>
+        </div>
+        <div class="flex justify-between border-t border-gray-700 pt-4">
+          <div>
+            <p class="text-xs text-gray-400">All-Time Revenue</p>
+            <p id="total-earnings" class="font-bold text-gray-200">₹0</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-400">Total Orders</p>
+            <p id="total-orders" class="font-bold text-gray-200">0</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hardware Status -->
+      <div class="glass-panel rounded-xl p-6 shadow-xl">
+        <h2 class="text-lg font-bold mb-4">Detected Printers</h2>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+            <div class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+              <div>
+                <p class="font-medium text-sm">HP LaserJet Pro</p>
+                <p class="text-xs text-green-400">Ready</p>
+              </div>
+            </div>
+            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+          </div>
+          <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700 opacity-50">
+            <div class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+              <div>
+                <p class="font-medium text-sm">Epson L3150 (WiFi)</p>
+                <p class="text-xs text-red-400">Offline</p>
+              </div>
+            </div>
+            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Print Queue & AIMD Monitoring -->
+    <div class="w-2/3 p-6 flex flex-col gap-6 bg-gray-900 overflow-hidden">
+      <div class="flex justify-between items-end mb-2">
+        <div>
+          <h2 class="text-2xl font-bold text-white">Live Print Queue</h2>
+          <p class="text-sm text-gray-400">Powered by AIMD Error Control</p>
+        </div>
+        <div class="flex flex-col">
+          <label for="print-engine" class="text-xs text-gray-400 mb-1">Printing Engine</label>
+          <select id="print-engine" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2">
+            <option value="native">⚡ Native C++ Spooler (Fastest)</option>
+            <option value="system">🌐 System Default (Compatible)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="queue-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-4">
+        <!-- Jobs will be injected here -->
+        <div class="flex flex-col items-center justify-center h-full text-gray-500">
+          <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          <p>Waiting for print jobs from cloud...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // UI Elements
+    const loginBtn = document.getElementById('login-btn');
+    const statusBadge = document.getElementById('status-badge');
+    const queueContainer = document.getElementById('queue-container');
+
+    // Handle Login
+    loginBtn.addEventListener('click', () => {
+      const partnerId = document.getElementById('partner-id').value;
+      const token = document.getElementById('access-token').value;
+      if(partnerId && token) {
+        loginBtn.innerText = "Connecting...";
+        window.electronAPI.login({ partnerId, token });
+      }
+    });
+
+    // Handle Cloud Connection Status
+    const engineSelect = document.getElementById('print-engine');
+    engineSelect.addEventListener('change', (e) => {
+      if(window.electronAPI.setPrintEngine) {
+        window.electronAPI.setPrintEngine(e.target.value);
+      }
+    });
+
+    window.electronAPI.onStatus((data) => {
+      if(data.connected) {
+        statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/50 text-green-400 border border-green-800/50 text-sm font-medium transition-colors";
+        statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Online';
+        loginBtn.innerText = "Connected";
+        loginBtn.disabled = true;
+        loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        // Phase 5: Fetch Financials
+        const token = document.getElementById('access-token').value;
+        fetch('http://localhost:3000/api/partner/financials', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(resData => {
+          if(resData.success && resData.financials) {
+            document.getElementById('financials-panel').classList.remove('hidden');
+            document.getElementById('today-earnings').innerText = `₹${resData.financials.todayEarnings.toLocaleString()}`;
+            document.getElementById('total-earnings').innerText = `₹${resData.financials.totalEarnings.toLocaleString()}`;
+            document.getElementById('total-orders').innerText = resData.financials.completedOrdersCount;
+          }
+        })
+        .catch(err => console.error("Failed to fetch financials:", err));
+
+      } else {
+        statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/50 text-red-400 border border-red-800/50 text-sm font-medium transition-colors";
+        statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline';
+        loginBtn.innerText = "Connect Engine";
+        loginBtn.disabled = false;
+        loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    });
+
+    // Handle Incoming Print Job
+    window.electronAPI.onIncomingJob((job) => {
+      // Remove empty state if present
+      if(queueContainer.children.length === 1 && queueContainer.children[0].tagName === 'DIV' && queueContainer.children[0].classList.contains('justify-center')) {
+        queueContainer.innerHTML = '';
+      }
+
+      const jobCard = document.createElement('div');
+      jobCard.id = `job-${job.jobId}`;
+      jobCard.className = "glass-panel rounded-xl p-5 border-l-4 border-l-indigo-500 shadow-md";
+      
+      jobCard.innerHTML = `
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <h3 class="font-bold text-lg text-white">Job ID: ${job.jobId.substring(0,8).toUpperCase()}</h3>
+              <span id="badge-${job.jobId}" class="px-2 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-400 border border-blue-800/50">Processing</span>
+            </div>
+            <p class="text-xs text-gray-400 flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Received just now
+            </p>
+          </div>
+          <div class="text-right text-sm text-gray-300">
+            <p><span class="text-gray-500">Size:</span> ${job.options.pageSize}</p>
+            <p><span class="text-gray-500">Color:</span> ${job.options.color}</p>
+            <p><span class="text-gray-500">Sided:</span> ${job.options.sided}</p>
+          </div>
+        </div>
+        
+        <!-- AIMD Status Area -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div class="flex justify-between text-xs mb-2">
+            <span class="text-gray-400">AIMD Engine Status</span>
+            <span id="status-text-${job.jobId}" class="font-medium text-white">Slicing PDF...</span>
+          </div>
+          
+          <div class="w-full bg-gray-900 rounded-full h-2 mb-2 overflow-hidden">
+            <div id="progress-${job.jobId}" class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
+          </div>
+          
+          <div class="flex justify-between text-xs">
+            <span class="text-gray-500">Congestion Window (Packet Size)</span>
+            <span id="cwnd-${job.jobId}" class="font-mono text-indigo-400 bg-indigo-900/30 px-2 rounded border border-indigo-800/50">5 pages</span>
+          </div>
+        </div>
+      `;
+      queueContainer.prepend(jobCard);
+    });
+
+    // Handle AIMD Print Status Updates
+    window.electronAPI.onPrintStatus((data) => {
+      const badge = document.getElementById(`badge-${data.jobId}`);
+      const statusText = document.getElementById(`status-text-${data.jobId}`);
+      const cwnd = document.getElementById(`cwnd-${data.jobId}`);
+      const progress = document.getElementById(`progress-${data.jobId}`);
+      const jobCard = document.getElementById(`job-${data.jobId}`);
+
+      if (badge && statusText && cwnd && progress) {
+        statusText.innerText = data.status;
+        cwnd.innerText = `${data.packetSize} pages`;
+        
+        if (data.status.includes('Error')) {
+          badge.className = "px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-400 border border-red-800/50 animate-pulse";
+          badge.innerText = "ERROR";
+          statusText.className = "font-bold text-red-400";
+          progress.className = "bg-red-500 h-2 rounded-full transition-all duration-500";
+          jobCard.classList.replace('border-l-indigo-500', 'border-l-red-500');
+          jobCard.classList.add('bg-red-900/10');
+          
+          // Inject physical resume button
+          if (!document.getElementById(`resume-${data.jobId}`)) {
+            const btn = document.createElement('button');
+            btn.id = `resume-${data.jobId}`;
+            btn.className = "mt-3 w-full py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-red-600/20";
+            btn.innerText = "Jam Cleared - Resume Printing (1 page packet)";
+            btn.onclick = () => {
+              btn.innerText = "Resuming...";
+              btn.disabled = true;
+              window.electronAPI.resumePrint(data.jobId);
+              setTimeout(() => { btn.remove(); }, 1000);
+            };
+            document.getElementById(`job-${data.jobId}`).appendChild(btn);
+          }
+        } 
+        else if (data.status === 'Completed') {
+          badge.className = "px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-400 border border-green-800/50";
+          badge.innerText = "COMPLETED";
+          statusText.className = "font-medium text-green-400";
+          progress.className = "bg-green-500 h-2 rounded-full transition-all duration-500";
+          progress.style.width = "100%";
+          jobCard.classList.replace('border-l-indigo-500', 'border-l-green-500');
+
+          // Phase 4: Lifecycle Action Buttons
+          if (!document.getElementById(`actions-${data.jobId}`)) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.id = `actions-${data.jobId}`;
+            actionsDiv.className = "mt-4 flex gap-2 border-t border-gray-700 pt-3";
+            
+            const readyBtn = document.createElement('button');
+            readyBtn.className = "flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-md";
+            readyBtn.innerText = "Mark Ready for Pickup";
+            readyBtn.onclick = () => {
+              readyBtn.innerText = "Updating...";
+              // Assuming window.electronAPI.updateOrderStatus is injected
+              window.electronAPI.updateOrderStatus(data.jobId, 'ready_for_pickup').then(() => {
+                readyBtn.innerText = "Ready ✓";
+                readyBtn.className = "flex-1 py-2 bg-green-600 text-white text-xs font-bold rounded-lg shadow-md";
+              });
+            };
+
+            const deliveredBtn = document.createElement('button');
+            deliveredBtn.className = "flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded-lg shadow-md";
+            deliveredBtn.innerText = "Mark Delivered";
+            deliveredBtn.onclick = () => {
+              deliveredBtn.innerText = "Updating...";
+              window.electronAPI.updateOrderStatus(data.jobId, 'delivered').then(() => {
+                jobCard.style.opacity = '0.5';
+                deliveredBtn.innerText = "Delivered ✓";
+              });
+            };
+
+            actionsDiv.appendChild(readyBtn);
+            actionsDiv.appendChild(deliveredBtn);
+            jobCard.appendChild(actionsDiv);
+          }
+        }
+        else {
+          progress.style.width = Math.min(parseInt(progress.style.width) + 20, 90) + "%";
+        }
+      }
+    });
+  </script>
+</body>
+</html>
