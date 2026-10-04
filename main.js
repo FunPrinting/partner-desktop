@@ -210,7 +210,9 @@ autoUpdater.on('update-not-available', () => {
 });
 
 autoUpdater.on('error', (err) => {
-  mainWindow.webContents.send('update-message', `Update error: ${err.message}`);
+  console.error('Update error:', err.message);
+  // Send a clean, short message to the UI instead of the massive HTTP header dump
+  mainWindow.webContents.send('update-message', 'Update check failed. You may be on the latest version.');
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
