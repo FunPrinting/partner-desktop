@@ -239,9 +239,16 @@ ipcMain.on('start-oauth', () => {
       
       if (partnerId && authToken) {
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end('<html><body style="background:#111827;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;"><h2>Authentication successful! You can close this window.</h2><script>window.close()</script></body></html>');
+        res.end('<html><body style="background:#111827;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;"><h2>Authentication successful!</h2><p>You can close this window and return to the FunPrinting Partner App.</p><script>window.close()</script></body></html>');
         
         mainWindow.webContents.send('oauth-success', { partnerId, token: authToken });
+        
+        // Automatically bring the desktop app to the front
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
         
         oauthServer.close();
         oauthServer = null;
@@ -289,6 +296,11 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
     mainWindow.webContents.send('status', { connected: true, message: 'Online and waiting for print jobs.' });
   });
 
+  // Remove previous listeners to prevent duplicates if user logs in multiple times
+  socket.off('new_print_job');
+  socket.off('connect_error');
+  socket.off('remote_control_action');
+
   socket.on('new_print_job', async (job) => {
     console.log('📥 New Print Job Received:', job.jobId);
     // Phase 1: Persistence
@@ -324,27 +336,27 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
       }
     }
   });
+});
 
-  // Store token for REST API calls
-  ipcMain.handle('update_order_status', async (event, { jobId, status }) => {
-    try {
-      console.log(`Phase 4: Updating order ${jobId} to ${status}`);
-      // Send REST API call to Cloud (simulated port 3000 since NextJS runs there)
-      const res = await fetch(`http://localhost:3000/api/partner/orders/${jobId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Though Next-Auth usually uses cookies, we'll pass token or use a dedicated endpoint
-        },
-        body: JSON.stringify({ status })
-      });
-      const data = await res.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to update status:', error);
-      return { success: false };
-    }
-  });
+// Store token for REST API calls (Moved OUTSIDE of login event to prevent duplicate handlers)
+ipcMain.handle('update_order_status', async (event, { jobId, status }) => {
+  try {
+    console.log(`Phase 4: Updating order ${jobId} to ${status}`);
+    // Send REST API call to Cloud (simulated port 3000 since NextJS runs there)
+    const res = await fetch(`http://localhost:3000/api/partner/orders/${jobId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` // Though Next-Auth usually uses cookies, we'll pass token or use a dedicated endpoint
+      },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to update status:', error);
+    return { success: false };
+  }
 });
 
 const { exec } = require('child_process');
