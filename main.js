@@ -401,6 +401,12 @@ const { exec } = require('child_process');
 // Store active print jobs for resumption
 const activeJobs = new Map();
 let isQueuePaused = false; // Phase 5: Remote Control
+let activePrinterName = null; // Store the user-selected printer
+
+ipcMain.on('set_active_printer', (event, printerName) => {
+  activePrinterName = printerName;
+  console.log(`🖨️ Active printer set to: ${activePrinterName}`);
+});
 
 ipcMain.on('resume_print', (event, { jobId }) => {
   console.log(`Phase 7: Manual Resume triggered for Job ${jobId}`);
@@ -517,13 +523,13 @@ async function startAIMDPrinting(job) {
 
         // Execute Hardware Print using selected engine
         if (selectedPrintEngine === 'native' && nodePrinter) {
-           console.log(`⚡ Using Native C++ Spooler (Fastest)`);
-           const defaultPrinter = nodePrinter.getDefaultPrinterName();
-           if(!defaultPrinter) throw new Error("No default printer");
+           console.log(`⚡ Using Native C++ Spooler (Fastest) on printer: ${activePrinterName || 'System Default'}`);
+           const targetPrinter = activePrinterName || nodePrinter.getDefaultPrinterName();
+           if(!targetPrinter) throw new Error("No default printer");
            
            nodePrinter.printDirect({
              data: slicedPdfBytes,
-             printer: defaultPrinter,
+             printer: targetPrinter,
              type: 'PDF',
              success: function(jobID){
                console.log("Native Job sent with ID: " + jobID);
@@ -533,13 +539,24 @@ async function startAIMDPrinting(job) {
              }
            });
         } else {
-           console.log(`🌐 Using System Default (PowerShell)`);
-           // Fallback to powershell Start-Process
+           console.log(`🌐 Using System Default (PowerShell/LP) on printer: ${activePrinterName || 'System Default'}`);
            if (process.platform === 'win32') {
-             const printCmd = `powershell -Command "Start-Process -FilePath '${finalPdfPath}' -Verb Print -WindowStyle Hidden"`;
+             // If a specific printer is active, pipe it to Out-Printer
+             let printCmd;
+             if (activePrinterName) {
+               // We must use SumatraPDF or similar to print to specific printer silently, or out-printer for text. 
+               // For PDF, Start-Process is easiest but it uses default printer. 
+               // So we temporarily set the default printer, print, then revert (or just accept it uses default)
+               // A better way is using PowerShell's Print-Pdf if available, or just letting Start-Process use it.
+               // Let's set it as default printer temporarily!
+               printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${finalPdfPath}' -Verb Print -WindowStyle Hidden; Start-Sleep -Seconds 3; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
+             } else {
+               printCmd = `powershell -Command "Start-Process -FilePath '${finalPdfPath}' -Verb Print -WindowStyle Hidden"`;
+             }
              exec(printCmd);
            } else {
-             const printCmd = `lp "${finalPdfPath}"`;
+             // Mac/Linux
+             const printCmd = activePrinterName ? `lp -d "${activePrinterName}" "${finalPdfPath}"` : `lp "${finalPdfPath}"`;
              exec(printCmd);
            }
         }
@@ -551,8 +568,8 @@ async function startAIMDPrinting(job) {
 
     // Check real hardware status via OS command (lpstat on macOS/Linux, Get-PrintJob on Windows)
     let statusCmd = process.platform === 'win32' 
-      ? 'powershell -Command "Get-PrintJob -PrinterName (Get-Printer | Where-Object {$_.Default -eq $true}).Name | Where-Object {$_.JobStatus -match \'Error|PaperOut|Offline\'}"'
-      : 'lpstat -p';
+      ? `powershell -Command "Get-PrintJob -PrinterName '${activePrinterName || "(Get-Printer | Where-Object {$_.Default -eq $true}).Name"}' | Where-Object {$_.JobStatus -match 'Error|PaperOut|Offline'}"`
+      : `lpstat -p "${activePrinterName || ''}"`;
       
     exec(statusCmd, (error, stdout, stderr) => {
       // If the printer is jammed or paused

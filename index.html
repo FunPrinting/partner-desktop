@@ -422,7 +422,7 @@
       // Fetch current profile
       document.getElementById('open-settings-btn').innerHTML = 'Loading...';
       try {
-        const res = await fetch('https://funprinting-web.vercel.app/api/partner/profile', {
+        const res = await fetch('https://www.funprinting.store/api/partner/profile', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -466,7 +466,7 @@
       saveBtn.disabled = true;
 
       try {
-        const res = await fetch('https://funprinting-web.vercel.app/api/partner/profile', {
+        const res = await fetch('https://www.funprinting.store/api/partner/profile', {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -488,14 +488,28 @@
     });
 
     // Printer Detection
-    async function loadPrinters() {
+    let activePrinterName = null;
+
+    window.togglePrinter = function(printerName) {
+      activePrinterName = printerName;
+      // Tell main process which printer is active
+      window.electronAPI.setActivePrinter(printerName);
+      loadPrinters(printersCache); // Re-render with the new active state
+    };
+
+    let printersCache = null;
+
+    async function loadPrinters(cached = null) {
       const listEl = document.getElementById('printers-list');
       if (!listEl) return;
       
-      listEl.innerHTML = '<div class="text-sm text-gray-500 text-center py-2">Scanning printers...</div>';
+      if (!cached) {
+        listEl.innerHTML = '<div class="text-sm text-gray-500 text-center py-2">Scanning printers...</div>';
+      }
       
       try {
-        const printers = await window.electronAPI.getPrinters();
+        const printers = cached || await window.electronAPI.getPrinters();
+        printersCache = printers;
         listEl.innerHTML = '';
         
         if (!printers || printers.length === 0) {
@@ -504,18 +518,28 @@
         }
 
         printers.forEach(printer => {
-          const isDefault = printer.isDefault ? '<span class="px-1.5 py-0.5 text-[10px] bg-indigo-900/50 text-indigo-300 rounded ml-2 border border-indigo-700">Default</span>' : '';
+          // If no active printer is set, default to the system default
+          if (!activePrinterName && printer.isDefault) {
+             activePrinterName = printer.name;
+             window.electronAPI.setActivePrinter(printer.name);
+          }
+
+          const isActive = (activePrinterName === printer.name);
+          const bgClass = isActive ? 'bg-indigo-900/40 border-indigo-500' : 'bg-gray-800/50 border-gray-700';
+          const statusText = isActive ? 'Active Server' : 'Inactive';
+          const statusColor = isActive ? 'text-green-400' : 'text-gray-500';
+          const dotColor = isActive ? 'bg-green-500' : 'bg-gray-600';
           
           listEl.innerHTML += `
-            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+            <div onclick="window.togglePrinter('${printer.name.replace(/'/g, "\\'")}')" class="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-gray-700 transition-colors ${bgClass}">
               <div class="flex items-center gap-3">
-                <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <svg class="w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-gray-400'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 <div class="overflow-hidden">
-                  <p class="font-medium text-sm truncate" title="${printer.name}">${printer.name}${isDefault}</p>
-                  <p class="text-xs text-green-400">Ready</p>
+                  <p class="font-medium text-sm truncate" title="${printer.name}">${printer.name}</p>
+                  <p class="text-xs ${statusColor} font-semibold">${statusText}</p>
                 </div>
               </div>
-              <div class="w-3 h-3 rounded-full bg-green-500 shrink-0"></div>
+              <div class="w-3 h-3 rounded-full ${dotColor} shrink-0"></div>
             </div>
           `;
         });
