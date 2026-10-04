@@ -188,7 +188,7 @@
 
         // Phase 5: Fetch Financials
         const token = document.getElementById('access-token').value;
-        fetch('http://localhost:3000/api/partner/financials', {
+        fetch('https://www.funprinting.store/api/partner/financials', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
