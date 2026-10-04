@@ -162,6 +162,27 @@
             <label class="block text-sm font-medium text-gray-300 mb-1">ZIP / Pincode</label>
             <input type="text" id="set-zip" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="110001">
           </div>
+          <div class="grid grid-cols-2 gap-4 border-t border-gray-700 pt-4 mt-4">
+            <div class="col-span-2"><label class="block text-sm font-bold text-indigo-400">Shop Location (Coordinates)</label></div>
+            <div>
+              <label class="block text-xs font-medium text-gray-300 mb-1">Latitude</label>
+              <input type="number" step="any" id="set-lat" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="28.6139">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-300 mb-1">Longitude</label>
+              <input type="number" step="any" id="set-lng" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="77.2090">
+            </div>
+          </div>
+          
+          <div class="border-t border-gray-700 pt-4 mt-4">
+            <div class="flex justify-between items-center mb-2">
+              <label class="block text-sm font-bold text-indigo-400">Delivery Points</label>
+              <button type="button" id="add-dp-btn" class="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded hover:bg-indigo-800 transition">+ Add Point</button>
+            </div>
+            <div id="dp-container" class="space-y-3">
+              <!-- dynamic delivery points will be injected here -->
+            </div>
+          </div>
         </form>
       </div>
       <div class="px-6 py-4 border-t border-gray-700 bg-gray-800/80 rounded-b-2xl flex justify-end gap-3">
@@ -412,6 +433,25 @@
     // Settings Modal Logic
     const settingsModal = document.getElementById('settings-modal');
     
+    function addDeliveryPointUI(name = '', lat = '', lng = '') {
+      const dpContainer = document.getElementById('dp-container');
+      const div = document.createElement('div');
+      div.className = "flex gap-2 items-center bg-gray-900/50 p-2 rounded border border-gray-700";
+      div.innerHTML = `
+        <div class="flex-1">
+          <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white mb-1" value="${name}">
+          <div class="flex gap-2">
+            <input type="number" step="any" placeholder="Lat" class="dp-lat w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" value="${lat}">
+            <input type="number" step="any" placeholder="Lng" class="dp-lng w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" value="${lng}">
+          </div>
+        </div>
+        <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-300 p-2">✕</button>
+      `;
+      dpContainer.appendChild(div);
+    }
+
+    document.getElementById('add-dp-btn')?.addEventListener('click', () => addDeliveryPointUI());
+
     document.getElementById('open-settings-btn').addEventListener('click', async () => {
       const token = document.getElementById('access-token').value;
       if (!token) {
@@ -434,6 +474,18 @@
             document.getElementById('set-state').value = data.partner.address.state || '';
             document.getElementById('set-zip').value = data.partner.address.zipCode || '';
           }
+          if (data.partner.location && data.partner.location.coordinates) {
+            document.getElementById('set-lng').value = data.partner.location.coordinates[0];
+            document.getElementById('set-lat').value = data.partner.location.coordinates[1];
+          }
+          
+          const dpContainer = document.getElementById('dp-container');
+          dpContainer.innerHTML = '';
+          if (data.partner.deliveryPoints) {
+            data.partner.deliveryPoints.forEach(dp => {
+              addDeliveryPointUI(dp.name, dp.location.coordinates[1], dp.location.coordinates[0]);
+            });
+          }
         }
         
         settingsModal.classList.remove('hidden');
@@ -452,14 +504,35 @@
       const token = document.getElementById('access-token').value;
       const saveBtn = document.getElementById('save-settings-btn');
       
+      const dps = Array.from(document.getElementById('dp-container').children).map(div => {
+        return {
+          name: div.querySelector('.dp-name').value,
+          location: {
+            type: 'Point',
+            coordinates: [
+              parseFloat(div.querySelector('.dp-lng').value) || 0,
+              parseFloat(div.querySelector('.dp-lat').value) || 0
+            ]
+          }
+        };
+      }).filter(dp => dp.name);
+
       const payload = {
         businessName: document.getElementById('set-business-name').value,
+        location: {
+           type: 'Point',
+           coordinates: [
+              parseFloat(document.getElementById('set-lng').value) || 0,
+              parseFloat(document.getElementById('set-lat').value) || 0
+           ]
+        },
         address: {
           street: document.getElementById('set-street').value,
           city: document.getElementById('set-city').value,
           state: document.getElementById('set-state').value,
           zipCode: document.getElementById('set-zip').value
-        }
+        },
+        deliveryPoints: dps
       };
 
       saveBtn.innerText = 'Saving...';
