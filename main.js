@@ -252,6 +252,17 @@ ipcMain.on('start-oauth', () => {
     }
   });
 
+  oauthServer.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.log('Port 4321 is already in use. Opening browser anyway.');
+      const webUrl = 'https://www.funprinting.store/partner/desktop-auth?callback=http://localhost:4321/callback';
+      shell.openExternal(webUrl);
+    } else {
+      console.error('OAuth Server Error:', e);
+      mainWindow.webContents.send('oauth-error', 'Internal server error: ' + e.message);
+    }
+  });
+
   oauthServer.listen(4321, () => {
     console.log('Started local OAuth callback server on port 4321');
     // Use the production web app for authentication
