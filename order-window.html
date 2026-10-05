@@ -177,7 +177,7 @@
       document.getElementById('summ-color').innerText = order.printingOptions?.color === 'bw' ? 'Black & White' : 'Color';
       document.getElementById('summ-sided').innerText = order.printingOptions?.sided === 'single' ? 'Single-sided' : 'Double-sided';
       document.getElementById('summ-copies').innerText = order.printingOptions?.copies || 1;
-      document.getElementById('summ-amount').innerText = \`₹\${order.amount.toFixed(2)}\`;
+      document.getElementById('summ-amount').innerText = `₹${order.amount.toFixed(2)}`;
       
       document.getElementById('cust-name').innerText = order.customerInfo?.name || 'Unknown';
       document.getElementById('cust-phone').innerText = order.customerInfo?.phone || 'Unknown';
