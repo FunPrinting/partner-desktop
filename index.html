@@ -236,16 +236,13 @@
               <div>
                 <label class="block text-xs font-medium text-gray-300 mb-1">Print Browser Engine</label>
                 <select id="set-print-browser" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white">
-                  <option value="chrome">Google Chrome (Recommended)</option>
-                  <option value="msedge">Microsoft Edge</option>
-                  <option value="brave">Brave Browser</option>
+                  <option value="default">Loading installed browsers...</option>
                 </select>
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-300 mb-1">Word-to-PDF Conversion Engine</label>
                 <select id="set-office-engine" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white">
-                  <option value="libreoffice">LibreOffice (Recommended)</option>
-                  <option value="msword">Microsoft Word</option>
+                  <option value="default">Loading installed engines...</option>
                 </select>
               </div>
             </div>
@@ -650,18 +647,38 @@
         const engines = await window.electronAPI.scanSystemEngines();
         
         const browserSelect = document.getElementById('set-print-browser');
-        Array.from(browserSelect.options).forEach(opt => {
-          if (!engines[opt.value]) {
-            opt.text += ' (Not Detected)';
-          }
-        });
+        browserSelect.innerHTML = ''; // Clear loading text
+        let hasBrowser = false;
+        
+        if (engines.chrome) { browserSelect.innerHTML += '<option value="chrome">Google Chrome (Recommended)</option>'; hasBrowser = true; }
+        if (engines.msedge) { browserSelect.innerHTML += '<option value="msedge">Microsoft Edge</option>'; hasBrowser = true; }
+        if (engines.brave) { browserSelect.innerHTML += '<option value="brave">Brave Browser</option>'; hasBrowser = true; }
+        
+        if (!hasBrowser) {
+          browserSelect.innerHTML = '<option value="none" disabled>No compatible browser detected (Fallback active)</option>';
+        }
         
         const officeSelect = document.getElementById('set-office-engine');
-        Array.from(officeSelect.options).forEach(opt => {
-          if (!engines[opt.value]) {
-            opt.text += ' (Not Detected)';
-          }
-        });
+        officeSelect.innerHTML = ''; // Clear loading text
+        let hasOffice = false;
+        
+        if (engines.libreoffice) { officeSelect.innerHTML += '<option value="libreoffice">LibreOffice (Recommended)</option>'; hasOffice = true; }
+        if (engines.msword) { officeSelect.innerHTML += '<option value="msword">Microsoft Word</option>'; hasOffice = true; }
+        
+        if (!hasOffice) {
+          officeSelect.innerHTML = '<option value="none" disabled>No office engine detected (Word docs will fail)</option>';
+        }
+        
+        // Restore saved selections if they still exist in the newly generated options
+        const savedBrowser = localStorage.getItem('printBrowser');
+        const savedOffice = localStorage.getItem('officeEngine');
+        
+        if (savedBrowser && Array.from(browserSelect.options).some(opt => opt.value === savedBrowser)) {
+          browserSelect.value = savedBrowser;
+        }
+        if (savedOffice && Array.from(officeSelect.options).some(opt => opt.value === savedOffice)) {
+          officeSelect.value = savedOffice;
+        }
       }
     }
     scanAndUpdateEnginesUI();
@@ -720,10 +737,8 @@
             document.getElementById('set-is-online').checked = data.partner.isOnline;
           }
           
-          const savedBrowser = localStorage.getItem('printBrowser') || 'chrome';
-          const savedOffice = localStorage.getItem('officeEngine') || 'libreoffice';
-          document.getElementById('set-print-browser').value = savedBrowser;
-          document.getElementById('set-office-engine').value = savedOffice;
+          // We don't forcefully override here anymore because scanAndUpdateEnginesUI handles restoring saved values
+          // only if they are actually installed on the system!
           
           const dpContainer = document.getElementById('dp-container');
           dpContainer.innerHTML = '';
