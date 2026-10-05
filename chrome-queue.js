@@ -316,13 +316,21 @@ async function processQueue() {
                 console.log(`${'─'.repeat(60)}\n`);
             }
             else {
-                // Job failed - keep in queue for retry
+                // Job failed - check retry limit
                 const errorMessage = result.error || result.message || 'Unknown error';
-                queuedJob.status = 'pending'; // Reset to pending for retry
-                queuedJob.error = errorMessage;
-                saveQueue();
-                console.log(`❌ Job ${queuedJob.id} FAILED (Attempt ${queuedJob.attempts}): ${errorMessage}`);
-                console.log(`📋 Job will be retried. Queue: ${printQueue.length} jobs remaining`);
+                
+                if (queuedJob.attempts >= 10) {
+                    queuedJob.status = 'failed'; // Mark permanently failed
+                    queuedJob.error = `Max retries (10) reached. Last error: ${errorMessage}`;
+                    saveQueue();
+                    console.log(`❌ Job ${queuedJob.id} FAILED PERMANENTLY (Max 10 attempts reached): ${errorMessage}`);
+                    console.log(`📋 Queue: ${printQueue.length} jobs remaining`);
+                } else {
+                    queuedJob.status = 'pending'; // Reset to pending for retry
+                    queuedJob.error = errorMessage;
+                    saveQueue();
+                    console.log(`❌ Job ${queuedJob.id} FAILED (Attempt ${queuedJob.attempts}): ${errorMessage}`);
+                    console.log(`📋 Job will be retried. Queue: ${printQueue.length} jobs remaining`);
                 // Log specific error types
                 const errorLower = errorMessage.toLowerCase();
                 if (errorLower.includes('printer not connected') ||
@@ -349,11 +357,19 @@ async function processQueue() {
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error(`❌ Error processing job ${queuedJob.id}:`, errorMessage);
-            // Reset to pending for retry
-            queuedJob.status = 'pending';
-            queuedJob.error = errorMessage;
-            saveQueue();
-            console.log(`📋 Queue: ${printQueue.length} jobs remaining (Job ${queuedJob.id} will be retried)`);
+            
+            if (queuedJob.attempts >= 10) {
+                queuedJob.status = 'failed';
+                queuedJob.error = `Max retries (10) reached. Last error: ${errorMessage}`;
+                saveQueue();
+                console.log(`📋 Queue: ${printQueue.length} jobs remaining (Job ${queuedJob.id} failed permanently)`);
+            } else {
+                // Reset to pending for retry
+                queuedJob.status = 'pending';
+                queuedJob.error = errorMessage;
+                saveQueue();
+                console.log(`📋 Queue: ${printQueue.length} jobs remaining (Job ${queuedJob.id} will be retried)`);
+            }
             // Log specific error types
             const errorLower = errorMessage.toLowerCase();
             if (errorLower.includes('printer not connected') ||

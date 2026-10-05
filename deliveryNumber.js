@@ -16,13 +16,52 @@ exports.getCurrentLetter = getCurrentLetter;
 exports.getCurrentFileNumber = getCurrentFileNumber;
 exports.resetDeliveryState = resetDeliveryState;
 exports.getDeliveryState = getDeliveryState;
+const fs = require('fs');
+const path = require('path');
+let app;
+try {
+    app = require('electron').app;
+} catch (e) {
+    // Fallback if not running in Electron
+}
+
+function getDeliveryStatePath() {
+    if (app) {
+        return path.join(app.getPath('userData'), 'delivery-state.json');
+    }
+    return path.join(process.cwd(), 'delivery-state.json');
+}
+
 let deliveryState = {
     currentLetter: process.env.DELIVERY_NUMBER_START || 'A',
     currentCount: 0,
-    currentFileNumber: 0, // Start at 0, will be incremented to 1 on first call
+    currentFileNumber: 0, 
     totalFiles: 0,
     lastDate: getCurrentDateString()
 };
+
+try {
+    const statePath = getDeliveryStatePath();
+    if (fs.existsSync(statePath)) {
+        const savedData = fs.readFileSync(statePath, 'utf8');
+        const parsedData = JSON.parse(savedData);
+        // Only load if the date matches today, otherwise let it reset naturally
+        if (parsedData.lastDate === getCurrentDateString()) {
+            deliveryState = { ...deliveryState, ...parsedData };
+        }
+    }
+} catch (e) {
+    console.error("Failed to load delivery state from disk:", e);
+}
+
+function saveDeliveryState() {
+    try {
+        const statePath = getDeliveryStatePath();
+        fs.writeFileSync(statePath, JSON.stringify(deliveryState, null, 2), 'utf8');
+    } catch (e) {
+        console.error("Failed to save delivery state to disk:", e);
+    }
+}
 function getCurrentDateString() {
     const now = new Date();
     const year = now.getFullYear();
@@ -69,6 +108,7 @@ function generateDeliveryNumber(printerIndex) {
     // Format: {LETTER}{YYYYMMDD}{PRINTER_INDEX}{FILE_NUMBER}
     const deliveryNumber = `${deliveryState.currentLetter}${currentDate}${printerIndex}${deliveryState.currentFileNumber}`;
     console.log(`Generated delivery number: ${deliveryNumber} (Letter: ${deliveryState.currentLetter}, File Number: ${deliveryState.currentFileNumber}, Count: ${deliveryState.currentCount}, Total: ${deliveryState.totalFiles})`);
+    saveDeliveryState();
     return deliveryNumber;
 }
 /**
@@ -106,6 +146,7 @@ function resetDeliveryState() {
         totalFiles: 0,
         lastDate: getCurrentDateString()
     };
+    saveDeliveryState();
 }
 /**
  * Get current delivery state (for debugging)

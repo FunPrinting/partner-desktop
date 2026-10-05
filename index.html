@@ -428,9 +428,30 @@
         request.onsuccess = (event) => {
           db = event.target.result;
           resolve(db);
+          // Cleanup expired items silently
+          setTimeout(cleanupExpiredCache, 2000);
         };
         request.onerror = (event) => reject(event.target.error);
       });
+    }
+
+    async function cleanupExpiredCache() {
+      if (!db) return;
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const now = Date.now();
+          request.result.forEach(order => {
+            if (order.expiry && order.expiry < now) {
+              store.delete(order.orderId);
+            }
+          });
+        };
+      } catch (e) {
+        console.error("Cache cleanup failed", e);
+      }
     }
 
     async function cacheOrder(order) {
