@@ -667,13 +667,21 @@ async function startAIMDPrinting(job) {
              }
            });
         } else {
-             console.log(`🌐 Using System Default Plugin (pdf-to-printer) on printer: ${activePrinterName || 'System Default'}`);
+             console.log(`🌐 Using System Default Plugin (Printer-API Chrome Engine) on printer: ${activePrinterName || 'System Default'}`);
              if (process.platform === 'win32') {
-               const ptp = require('pdf-to-printer');
-               const options = activePrinterName ? { printer: activePrinterName } : {};
-               console.log('⚡ Calling pdf-to-printer module API...');
-               await ptp.print(finalPdfPath, options);
-               console.log('✅ pdf-to-printer executed successfully.');
+               const chromePrinter = require('./chrome-printer');
+               const isMonochrome = job.options && job.options.isMonochrome !== undefined ? job.options.isMonochrome : true;
+               
+               console.log('⚡ Calling Printer-API Chrome Printing Engine...');
+               try {
+                 await chromePrinter.printPdfWithChrome(finalPdfPath, activePrinterName || '', isMonochrome, 1, 0);
+                 console.log('✅ Printer-API Chrome Printing executed successfully.');
+               } catch (chromeErr) {
+                 console.warn(`⚠️ Printer-API Chrome failed, falling back to pdf-to-printer:`, chromeErr);
+                 const ptp = require('pdf-to-printer');
+                 const options = activePrinterName ? { printer: activePrinterName } : {};
+                 await ptp.print(finalPdfPath, options);
+               }
              
            } else {
              // Mac/Linux

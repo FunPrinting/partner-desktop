@@ -16,7 +16,8 @@
     "pdf-lib": "^1.17.1",
     "pdf-to-printer": "^5.8.1",
     "socket.io-client": "^4.8.4",
-    "unix-print": "^1.3.2"
+    "unix-print": "^1.3.2",
+    "uuid": "^14.0.2"
   },
   "optionalDependencies": {
     "@thiagoelg/node-printer": "^2.2.1"
