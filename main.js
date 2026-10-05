@@ -471,6 +471,49 @@ ipcMain.on('set_paths', (event, paths) => {
   console.log(`🔧 Engines set: Browser="${activePrintBrowser}", Office="${activeOfficeEngine}"`);
 });
 
+ipcMain.handle('scan-system-engines', async () => {
+  const engines = { chrome: false, msedge: false, brave: false, libreoffice: false, msword: false };
+  
+  if (process.platform === 'win32') {
+    const util = require('util');
+    const execAsync = util.promisify(require('child_process').exec);
+    
+    // Check Browsers via Where command
+    try { await execAsync('where chrome.exe'); engines.chrome = true; } catch (e) {}
+    try { await execAsync('where msedge.exe'); engines.msedge = true; } catch (e) {}
+    try { await execAsync('where brave.exe'); engines.brave = true; } catch (e) {}
+    
+    // Check Office Suites
+    try { await execAsync('where soffice.exe'); engines.libreoffice = true; } catch (e) {}
+    
+    // Check MS Word via COM Object check (PowerShell)
+    try { 
+      const { stdout } = await execAsync('powershell -Command "try { $w = New-Object -ComObject Word.Application; $w.Quit(); Write-Output 1 } catch { Write-Output 0 }"');
+      if (stdout.trim() === '1') engines.msword = true;
+    } catch (e) {}
+    
+    // Fallback path checks for common Windows installs if 'where' fails
+    const fs = require('fs');
+    const checkPaths = (paths) => paths.some(p => {
+      try { return fs.existsSync(p); } catch (e) { return false; }
+    });
+    
+    if (!engines.chrome) engines.chrome = checkPaths([
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    ]);
+    if (!engines.msedge) engines.msedge = checkPaths([
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+    ]);
+    if (!engines.libreoffice) engines.libreoffice = checkPaths([
+      'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+      'C:\\Program Files\\LibreOffice 5\\program\\soffice.exe'
+    ]);
+  }
+  return engines;
+});
+
 // Phase 7: Real AIMD Printing Engine (Hardware Execution)
 async function startAIMDPrinting(job) {
   let packetSize = 5;

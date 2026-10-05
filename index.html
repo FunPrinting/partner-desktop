@@ -644,6 +644,28 @@
     // Settings Modal Logic
     const settingsModal = document.getElementById('settings-modal');
     
+    // Scan installed system engines dynamically
+    async function scanAndUpdateEnginesUI() {
+      if (window.electronAPI && window.electronAPI.scanSystemEngines) {
+        const engines = await window.electronAPI.scanSystemEngines();
+        
+        const browserSelect = document.getElementById('set-print-browser');
+        Array.from(browserSelect.options).forEach(opt => {
+          if (!engines[opt.value]) {
+            opt.text += ' (Not Detected)';
+          }
+        });
+        
+        const officeSelect = document.getElementById('set-office-engine');
+        Array.from(officeSelect.options).forEach(opt => {
+          if (!engines[opt.value]) {
+            opt.text += ' (Not Detected)';
+          }
+        });
+      }
+    }
+    scanAndUpdateEnginesUI();
+    
     function addDeliveryPointUI(name = '', lat = '', lng = '') {
       const dpContainer = document.getElementById('dp-container');
       const div = document.createElement('div');
