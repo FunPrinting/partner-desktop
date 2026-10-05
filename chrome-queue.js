@@ -331,6 +331,8 @@ async function processQueue() {
                     saveQueue();
                     console.log(`❌ Job ${queuedJob.id} FAILED (Attempt ${queuedJob.attempts}): ${errorMessage}`);
                     console.log(`📋 Job will be retried. Queue: ${printQueue.length} jobs remaining`);
+                }
+                
                 // Log specific error types
                 const errorLower = errorMessage.toLowerCase();
                 if (errorLower.includes('printer not connected') ||

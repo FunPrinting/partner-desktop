@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data)),
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName),
-  getQueue: () => ipcRenderer.invoke('get-queue')
+  getQueue: () => ipcRenderer.invoke('get-queue'),
+  onSystemLog: (callback) => ipcRenderer.on('system-log', (_event, data) => callback(data))
 });

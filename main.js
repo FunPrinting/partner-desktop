@@ -30,6 +30,39 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+  
+  // Intercept console.log to send to frontend Live Logs
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  
+  function sendLogToFrontend(level, ...args) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Format args as string
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      
+      try {
+        mainWindow.webContents.send('system-log', { level, message, timestamp: new Date().toISOString() });
+      } catch(e) {}
+    }
+  }
+
+  console.log = (...args) => {
+    originalLog.apply(console, args);
+    sendLogToFrontend('info', ...args);
+  };
+  
+  console.error = (...args) => {
+    originalError.apply(console, args);
+    sendLogToFrontend('error', ...args);
+  };
+  
+  console.warn = (...args) => {
+    originalWarn.apply(console, args);
+    sendLogToFrontend('warn', ...args);
+  };
 }
 
 app.whenReady().then(() => {
@@ -195,13 +228,23 @@ ipcMain.on('open-order-window', (event, order) => {
     backgroundColor: '#f9fafb'
   });
 
-  // Prevent PDF URLs from triggering download dialogs — keep them in the iframe
-  win.webContents.session.on('will-download', (event, item) => {
-    const url = item.getURL();
-    // If the download was triggered by a PDF link in the preview, cancel it
-    if (url && (url.includes('.pdf') || url.includes('cloudinary') || url.includes('firebasestorage'))) {
-      event.preventDefault();
+  // Force PDFs to display inline instead of downloading by modifying response headers
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url;
+    let headers = details.responseHeaders;
+    
+    // Only intercept for likely document URLs
+    if (url.includes('cloudinary.com') || url.includes('firebasestorage') || url.includes('.pdf')) {
+      if (headers) {
+        if (headers['content-disposition']) {
+          headers['content-disposition'] = ['inline'];
+        }
+        if (headers['Content-Disposition']) {
+          headers['Content-Disposition'] = ['inline'];
+        }
+      }
     }
+    callback({ responseHeaders: headers });
   });
   
   win.loadFile('order-window.html');
