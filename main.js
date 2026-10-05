@@ -240,6 +240,39 @@ ipcMain.on('inject_job', async (event, job) => {
   await startAIMDPrinting(job);
 });
 
+let orderWindows = {};
+
+ipcMain.on('open-order-window', (event, order) => {
+  if (orderWindows[order.orderId]) {
+    orderWindows[order.orderId].focus();
+    return;
+  }
+  
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 800,
+    title: `Order #${order.orderId}`,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    },
+    backgroundColor: '#f9fafb'
+  });
+  
+  win.loadFile('order-window.html');
+  
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('order-data', order);
+  });
+  
+  win.on('closed', () => {
+    delete orderWindows[order.orderId];
+  });
+  
+  orderWindows[order.orderId] = win;
+});
+
 ipcMain.on('check-updates', () => {
   mainWindow.webContents.send('update-message', 'Checking for updates...');
   autoUpdater.checkForUpdatesAndNotify();
