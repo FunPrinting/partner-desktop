@@ -419,7 +419,7 @@ ipcMain.handle('update_order_status', async (event, { jobId, status }) => {
   try {
     console.log(`Phase 4: Updating order ${jobId} to ${status}`);
     // Send REST API call to Cloud (NextJS runs on Vercel)
-    const res = await fetch(`https://www.funprinting.store/api/partner/orders/${jobId}/status`, {
+    const res = await fetch(`https://www.funprinting.store/api/partner/orders/${jobId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
