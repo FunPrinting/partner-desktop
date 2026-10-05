@@ -58,13 +58,28 @@ function loadQueue() {
         if (fs.existsSync(QUEUE_FILE)) {
             const data = fs.readFileSync(QUEUE_FILE, 'utf-8');
             const parsed = JSON.parse(data);
-            printQueue = parsed.map((item) => ({
-                ...item,
-                status: item.status || 'pending', // Default to pending for legacy entries
-                createdAt: new Date(item.createdAt),
-                lastAttemptAt: item.lastAttemptAt ? new Date(item.lastAttemptAt) : undefined,
-                completedAt: item.completedAt ? new Date(item.completedAt) : undefined
-            }));
+            printQueue = parsed.map((item) => {
+                // If it's a legacy job from old main.js queue format, it won't have .job or .id
+                if (!item.job) {
+                    return {
+                        id: item.id || `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        job: item,
+                        printerIndex: 0,
+                        status: 'pending',
+                        attempts: 0,
+                        createdAt: new Date()
+                    };
+                }
+                
+                return {
+                    ...item,
+                    status: item.status || 'pending', // Default to pending for legacy entries
+                    attempts: item.attempts || 0,
+                    createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
+                    lastAttemptAt: item.lastAttemptAt ? new Date(item.lastAttemptAt) : undefined,
+                    completedAt: item.completedAt ? new Date(item.completedAt) : undefined
+                };
+            });
             // Reset any jobs that were stuck in 'printing' state (server crashed mid-print)
             let resetCount = 0;
             printQueue.forEach(job => {
