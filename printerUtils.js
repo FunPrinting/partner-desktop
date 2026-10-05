@@ -329,13 +329,14 @@ async function generateOrderSummaryPage(orderDetails, customerInfo, orderId, ord
             return 'Template';
         return orderType;
     };
+    const options = orderDetails.printingOptions || orderDetails;
     const orderSummaryLines = [
-        `Order Type: ${formatOrderType(orderDetails.orderType)}`,
-        `Page Size: ${orderDetails.pageSize}`,
-        `Color: ${formatColor(orderDetails.color)}`,
-        `Sided: ${formatSided(orderDetails.sided)}`,
-        `Copies: ${orderDetails.copies}`,
-        `Pages: ${orderDetails.pages}`,
+        `Order Type: ${formatOrderType(orderDetails.orderType || 'file')}`,
+        `Page Size: ${options.pageSize}`,
+        `Color: ${formatColor(options.color)}`,
+        `Sided: ${formatSided(options.sided)}`,
+        `Copies: ${options.copies}`,
+        `Pages: ${options.pages || orderDetails.pages || 'N/A'}`,
     ];
     // Add Service Options
     if (orderDetails.serviceOptions && orderDetails.serviceOptions.length > 0) {
@@ -348,7 +349,8 @@ async function generateOrderSummaryPage(orderDetails, customerInfo, orderId, ord
         });
     }
     // Add Total Amount (use "Rs" instead of ₹ symbol to avoid encoding issues with standard fonts)
-    orderSummaryLines.push(`Total Amount: Rs ${orderDetails.totalAmount}`);
+    const amount = orderDetails.amount !== undefined ? orderDetails.amount : orderDetails.totalAmount;
+    orderSummaryLines.push(`Total Amount: Rs ${amount}`);
     // Add Expected Delivery
     if (orderDetails.expectedDelivery) {
         orderSummaryLines.push(`Expected Delivery: ${orderDetails.expectedDelivery}`);
