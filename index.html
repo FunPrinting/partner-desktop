@@ -230,10 +230,15 @@
             <label class="block text-sm font-medium text-gray-600 mb-1">ZIP / Pincode</label>
             <input type="text" id="set-zip" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900" placeholder="110001">
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-600 mb-1">Shop Phone Numbers</label>
-            <input type="text" id="set-phone-numbers" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900" placeholder="e.g. +919876543210, 080-12345678">
-            <p class="text-xs text-gray-500 mt-1">Comma-separated. Shown to all customers.</p>
+          <div class="border-t border-gray-200 pt-4 mt-4">
+            <div class="flex justify-between items-center mb-2">
+              <label class="block text-sm font-bold text-blue-600">Shop Phone Numbers</label>
+              <button type="button" id="add-phone-btn" class="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded hover:bg-indigo-800 transition">+ Add Phone</button>
+            </div>
+            <div id="phones-container" class="space-y-2">
+              <!-- dynamic phones will be injected here -->
+            </div>
+            <p class="text-xs text-gray-500 mt-2">These numbers will be visible to all customers ordering from your shop.</p>
           </div>
 
           <div class="border-t border-gray-200 pt-4 mt-4">
@@ -902,6 +907,18 @@
       dpContainer.appendChild(div);
     }
 
+    function addPhoneUI(phone = '') {
+      const container = document.getElementById('phones-container');
+      const div = document.createElement('div');
+      div.className = "flex gap-2 items-center";
+      div.innerHTML = `
+        <input type="text" placeholder="e.g. +919876543210" class="shop-phone w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-900" value="${phone}">
+        <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
+      `;
+      container.appendChild(div);
+    }
+    document.getElementById('add-phone-btn')?.addEventListener('click', () => addPhoneUI());
+
     document.getElementById('add-dp-btn')?.addEventListener('click', () => addDeliveryPointUI());
 
     document.getElementById('open-settings-btn').addEventListener('click', async () => {
@@ -942,10 +959,12 @@
           // We don't forcefully override here anymore because scanAndUpdateEnginesUI handles restoring saved values
           // only if they are actually installed on the system!
           
-          if (data.partner.phoneNumbers) {
-            document.getElementById('set-phone-numbers').value = data.partner.phoneNumbers.join(', ');
-          } else {
-            document.getElementById('set-phone-numbers').value = '';
+          const phoneContainer = document.getElementById('phones-container');
+          phoneContainer.innerHTML = '';
+          if (data.partner.phoneNumbers && data.partner.phoneNumbers.length > 0) {
+            data.partner.phoneNumbers.forEach(phone => {
+              addPhoneUI(phone);
+            });
           }
           
           const dpContainer = document.getElementById('dp-container');
@@ -1120,8 +1139,9 @@
         };
       }).filter(dp => dp.name);
 
-      const phoneNumbersRaw = document.getElementById('set-phone-numbers').value;
-      const phoneNumbers = phoneNumbersRaw ? phoneNumbersRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const phoneNumbers = Array.from(document.getElementById('phones-container').children)
+        .map(div => div.querySelector('.shop-phone')?.value.trim())
+        .filter(Boolean);
 
       const payload = {
         businessName: document.getElementById('set-business-name').value,
