@@ -233,6 +233,13 @@ app.on('window-all-closed', function () {
 });
 
 // Auto Updater Events
+ipcMain.on('inject_job', async (event, job) => {
+  console.log('📥 Offline/Recovered Job Injected:', job.jobId);
+  saveJobToQueue(job);
+  mainWindow.webContents.send('incoming_job', job);
+  await startAIMDPrinting(job);
+});
+
 ipcMain.on('check-updates', () => {
   mainWindow.webContents.send('update-message', 'Checking for updates...');
   autoUpdater.checkForUpdatesAndNotify();
