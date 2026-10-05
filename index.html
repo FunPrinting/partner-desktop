@@ -118,11 +118,14 @@
           <p class="text-sm text-gray-500">Powered by AIMD Error Control</p>
         </div>
         <div class="flex flex-col">
-          <label for="print-engine" class="text-xs text-gray-500 mb-1">Printing Engine</label>
-          <select id="print-engine" class="bg-white border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-blue-500 block w-full p-2">
-            <option value="native">⚡ Native C++ Spooler (Fastest)</option>
-            <option value="system">🌐 System Default (Compatible)</option>
-          </select>
+          <span class="text-xs text-gray-500 mb-1">Engine Status</span>
+          <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium rounded-lg px-3 py-2 flex items-center gap-2">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+            </span>
+            Printer-API Engine Active
+          </div>
         </div>
       </div>
 
@@ -240,23 +243,6 @@
             </label>
           </div>
 
-          <div class="border-t border-gray-200 pt-4 mt-4">
-            <label class="block text-sm font-bold text-blue-600 mb-3">System Print Engines</label>
-            <div class="space-y-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Print Browser Engine</label>
-                <select id="set-print-browser" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900">
-                  <option value="default">Loading installed browsers...</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Word-to-PDF Conversion Engine</label>
-                <select id="set-office-engine" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900">
-                  <option value="default">Loading installed engines...</option>
-                </select>
-              </div>
-            </div>
-          </div>
 
           <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 mt-4">
             <div class="col-span-2 flex justify-between items-center">
@@ -628,12 +614,6 @@
     });
 
     // Handle Cloud Connection Status
-    const engineSelect = document.getElementById('print-engine');
-    engineSelect.addEventListener('change', (e) => {
-      if(window.electronAPI.setPrintEngine) {
-        window.electronAPI.setPrintEngine(e.target.value);
-      }
-    });
 
     window.electronAPI.onStatus((data) => {
       if(data.connected) {
@@ -814,47 +794,7 @@
     // Settings Modal Logic
     const settingsModal = document.getElementById('settings-modal');
     
-    // Scan installed system engines dynamically
-    async function scanAndUpdateEnginesUI() {
-      if (window.electronAPI && window.electronAPI.scanSystemEngines) {
-        const engines = await window.electronAPI.scanSystemEngines();
-        
-        const browserSelect = document.getElementById('set-print-browser');
-        browserSelect.innerHTML = ''; // Clear loading text
-        let hasBrowser = false;
-        
-        if (engines.chrome) { browserSelect.innerHTML += '<option value="chrome">Google Chrome (Recommended)</option>'; hasBrowser = true; }
-        if (engines.msedge) { browserSelect.innerHTML += '<option value="msedge">Microsoft Edge</option>'; hasBrowser = true; }
-        if (engines.brave) { browserSelect.innerHTML += '<option value="brave">Brave Browser</option>'; hasBrowser = true; }
-        
-        if (!hasBrowser) {
-          browserSelect.innerHTML = '<option value="none" disabled>No compatible browser detected (Fallback active)</option>';
-        }
-        
-        const officeSelect = document.getElementById('set-office-engine');
-        officeSelect.innerHTML = ''; // Clear loading text
-        let hasOffice = false;
-        
-        if (engines.libreoffice) { officeSelect.innerHTML += '<option value="libreoffice">LibreOffice (Recommended)</option>'; hasOffice = true; }
-        if (engines.msword) { officeSelect.innerHTML += '<option value="msword">Microsoft Word</option>'; hasOffice = true; }
-        
-        if (!hasOffice) {
-          officeSelect.innerHTML = '<option value="none" disabled>No office engine detected (Word docs will fail)</option>';
-        }
-        
-        // Restore saved selections if they still exist in the newly generated options
-        const savedBrowser = localStorage.getItem('printBrowser');
-        const savedOffice = localStorage.getItem('officeEngine');
-        
-        if (savedBrowser && Array.from(browserSelect.options).some(opt => opt.value === savedBrowser)) {
-          browserSelect.value = savedBrowser;
-        }
-        if (savedOffice && Array.from(officeSelect.options).some(opt => opt.value === savedOffice)) {
-          officeSelect.value = savedOffice;
-        }
-      }
-    }
-    scanAndUpdateEnginesUI();
+
     
     function addDeliveryPointUI(name = '', lat = '', lng = '') {
       const dpContainer = document.getElementById('dp-container');
@@ -1108,13 +1048,7 @@
         deliveryPoints: dps
       };
 
-      const printBrowser = document.getElementById('set-print-browser').value;
-      const officeEngine = document.getElementById('set-office-engine').value;
-      localStorage.setItem('printBrowser', printBrowser);
-      localStorage.setItem('officeEngine', officeEngine);
-      if (window.electronAPI.setPaths) {
-        window.electronAPI.setPaths({ printBrowser, officeEngine });
-      }
+
 
       saveBtn.innerText = 'Saving...';
       saveBtn.disabled = true;

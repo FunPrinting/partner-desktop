@@ -200,7 +200,10 @@
         if(fileUrl) window.open(fileUrl, '_blank');
       };
 
-      if (fileUrl && fileUrl.toLowerCase().endsWith('.pdf')) {
+      const isPdf = filename.toLowerCase().endsWith('.pdf');
+      const isImage = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
+
+      if (fileUrl && (isPdf || isImage)) {
         frame.src = fileUrl;
         frame.classList.remove('hidden');
         placeholder.classList.add('hidden');
@@ -218,7 +221,8 @@
           orderId: currentOrder.orderId,
           url: currentOrder.fileURL || (currentOrder.fileURLs ? currentOrder.fileURLs[0] : null),
           options: currentOrder.printingOptions,
-          customer: currentOrder.customerInfo
+          customer: currentOrder.customerInfo,
+          orderDetails: currentOrder
         };
         window.electronAPI.injectJob(job);
         alert('Order injected into Local Print Queue for processing!');
