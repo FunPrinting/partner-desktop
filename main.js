@@ -210,27 +210,19 @@ app.whenReady().then(() => {
   });
   
   // Phase 1: Recover Jobs on Boot (Server side processing)
-  setTimeout(async () => {
-    if (fs.existsSync(queuePath)) {
-      try {
-        const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
-        if (queue.length > 0) {
-          console.log(`♻️ Recovered ${queue.length} pending jobs from disk!`);
-          for (const job of queue) {
-             await startAIMDPrinting(job);
-          }
-        }
-      } catch(e) {
-        console.error("Failed to load queue", e);
-      }
-    }
-  }, 3000); 
+  // chrome-queue auto-recovers on require()
 });
 
 ipcMain.handle('get-queue', async () => {
   try {
     if (fs.existsSync(queuePath)) {
-      return JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+      const q = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+      return q.map(qj => ({
+        jobId: qj.id,
+        orderId: qj.job.orderId || qj.id,
+        url: qj.job.fileUrl,
+        options: qj.job.printingOptions
+      }));
     }
   } catch (e) {
     console.error("Failed to read queue for UI", e);
@@ -244,10 +236,33 @@ app.on('window-all-closed', function () {
 
 // Auto Updater Events
 ipcMain.on('inject_job', async (event, job) => {
-  console.log('📥 Offline/Recovered Job Injected:', job.jobId);
-  saveJobToQueue(job);
+  console.log('📥 Offline/Recovered Job Injected to Advanced Queue:', job.jobId);
+  
+  const printQueue = require('./chrome-queue');
+  
+  const apiJob = {
+    orderId: job.orderId || job.jobId,
+    fileUrl: job.url,
+    fileName: job.url.split('/').pop() || 'document.pdf',
+    fileType: 'pdf',
+    printingOptions: job.options || {
+      pageSize: 'A4',
+      color: 'bw',
+      sided: 'single',
+      copies: 1
+    },
+    orderDetails: job.orderDetails,
+    customerInfo: job.customer
+  };
+  
+  if (job.options && job.options.isMonochrome) {
+    apiJob.printingOptions.color = 'bw';
+  } else if (job.options && job.options.isMonochrome === false) {
+    apiJob.printingOptions.color = 'color';
+  }
+
+  printQueue.addToQueue(apiJob, 0); // 0 is default printer index
   mainWindow.webContents.send('incoming_job', job);
-  await startAIMDPrinting(job);
 });
 
 let orderWindows = {};
@@ -423,14 +438,33 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   socket.off('reconnect_failed');
 
   socket.on('new_print_job', async (job) => {
-    console.log('📥 New Print Job Received:', job.jobId);
-    // Phase 1: Persistence
-    saveJobToQueue(job);
+    console.log('📥 New Print Job Received by Advanced Queue:', job.jobId);
     
+    const printQueue = require('./chrome-queue');
+    
+    const apiJob = {
+      orderId: job.orderId || job.jobId,
+      fileUrl: job.url,
+      fileName: job.url.split('/').pop() || 'document.pdf',
+      fileType: 'pdf',
+      printingOptions: job.options || {
+        pageSize: 'A4',
+        color: 'bw',
+        sided: 'single',
+        copies: 1
+      },
+      orderDetails: job.orderDetails,
+      customerInfo: job.customer
+    };
+    
+    if (job.options && job.options.isMonochrome) {
+      apiJob.printingOptions.color = 'bw';
+    } else if (job.options && job.options.isMonochrome === false) {
+      apiJob.printingOptions.color = 'color';
+    }
+
+    printQueue.addToQueue(apiJob, 0); // 0 is default printer index
     mainWindow.webContents.send('incoming_job', job);
-    
-    // Auto-start Phase 7 AIMD Printing Engine logic here
-    await startAIMDPrinting(job);
   });
 
   socket.on('connect_error', (err) => {

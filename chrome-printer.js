@@ -1811,8 +1811,17 @@ async function printFile(filePath, options) {
 /**
  * Main print function
  */
+function emitStatus(jobId, status) {
+  try {
+    const { BrowserWindow } = require("electron");
+    const wins = BrowserWindow.getAllWindows();
+    if (wins.length > 0) wins[0].webContents.send("print_status", { jobId, status, packetSize: 5 });
+  } catch(e) {}
+}
+
 async function printJob(job, printerIndex) {
     try {
+        emitStatus(job.id || job.orderId, "Downloading document...");
         console.log(`Starting print job: ${job.fileName} (Delivery: ${job.deliveryNumber})`);
         // Create temp directory
         const tempDir = path.join(process.cwd(), 'temp');
@@ -1852,8 +1861,10 @@ async function printJob(job, printerIndex) {
         console.log(`File downloaded to ${tempFilePath}`);
         // Print the file FIRST (will be at bottom of stack)
         console.log(`Printing file: ${tempFilePath}`);
+        emitStatus(job.id || job.orderId, "Sending to printer...");
         await printFile(tempFilePath, job.printingOptions);
         console.log(`File printed successfully`);
+        emitStatus(job.id || job.orderId, "Completed!");
         // Print order summary page LAST (will appear on top due to stack-based printing - LIFO)
         if (job.orderDetails && job.customerInfo && !isSimpleSingleSheetJob) {
             console.log(`Printing order summary page (non-simple job)...`);
@@ -1883,6 +1894,7 @@ async function printJob(job, printerIndex) {
         };
     }
     catch (error) {
+        emitStatus(job.id || job.orderId, "Error: Print Failed");
         console.error('Error printing job:', error);
         // Extract error message
         const errorMessage = error instanceof Error ? error.message : String(error);
