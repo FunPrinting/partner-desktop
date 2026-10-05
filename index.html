@@ -98,6 +98,10 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             Manage Shop Profile
           </button>
+          <button id="open-orders-btn" class="w-full bg-green-600 hover:bg-green-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            Manage Orders
+          </button>
           <button id="check-update-btn" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 border border-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span id="update-btn-text">Check for Updates</span>
@@ -131,6 +135,37 @@
       </div>
     </div>
   </main>
+
+  <!-- Orders Modal -->
+  <div id="orders-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+    <div class="glass-panel rounded-2xl w-[900px] max-w-[95vw] max-h-[90vh] flex flex-col shadow-2xl border border-gray-600/50">
+      <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
+        <h2 class="text-xl font-bold">Order Management</h2>
+        <button id="close-orders-btn" class="text-gray-400 hover:text-white transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="text-gray-400 text-sm border-b border-gray-700">
+              <th class="px-4 py-3 font-medium">Order ID</th>
+              <th class="px-4 py-3 font-medium">Date</th>
+              <th class="px-4 py-3 font-medium">Document</th>
+              <th class="px-4 py-3 font-medium">Revenue</th>
+              <th class="px-4 py-3 font-medium">Status</th>
+              <th class="px-4 py-3 font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody id="orders-tbody" class="divide-y divide-gray-800 text-sm">
+            <!-- dynamic orders -->
+          </tbody>
+        </table>
+        <div id="orders-loading" class="text-center py-8 text-gray-500 hidden">Loading orders...</div>
+        <div id="orders-empty" class="text-center py-8 text-gray-500 hidden">No orders found.</div>
+      </div>
+    </div>
+  </div>
 
   <!-- Settings Modal -->
   <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center">
@@ -246,6 +281,107 @@
     const queueContainer = document.getElementById('queue-container');
     const checkUpdateBtn = document.getElementById('check-update-btn');
     const updateBtnText = document.getElementById('update-btn-text');
+    
+    // Orders Modal Elements
+    const ordersModal = document.getElementById('orders-modal');
+    const openOrdersBtn = document.getElementById('open-orders-btn');
+    const closeOrdersBtn = document.getElementById('close-orders-btn');
+    const ordersTbody = document.getElementById('orders-tbody');
+    const ordersLoading = document.getElementById('orders-loading');
+    const ordersEmpty = document.getElementById('orders-empty');
+
+    openOrdersBtn.addEventListener('click', async () => {
+      ordersModal.classList.remove('hidden');
+      await loadOrders();
+    });
+
+    closeOrdersBtn.addEventListener('click', () => {
+      ordersModal.classList.add('hidden');
+    });
+
+    async function loadOrders() {
+      const token = document.getElementById('access-token').value;
+      if (!token) return;
+      
+      ordersTbody.innerHTML = '';
+      ordersLoading.classList.remove('hidden');
+      ordersEmpty.classList.add('hidden');
+
+      try {
+        const res = await fetch('https://www.funprinting.store/api/partner/orders', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        
+        ordersLoading.classList.add('hidden');
+        
+        if (data.success && data.orders.length > 0) {
+          data.orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-gray-800/50 transition-colors";
+            
+            let statusBadgeHtml = '';
+            if (order.status === 'completed') statusBadgeHtml = '<span class="px-2 py-1 bg-green-900/50 text-green-400 rounded-full text-xs">Completed</span>';
+            else if (order.status === 'ready_for_pickup') statusBadgeHtml = '<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 rounded-full text-xs">Ready</span>';
+            else if (order.status === 'printing') statusBadgeHtml = '<span class="px-2 py-1 bg-blue-900/50 text-blue-400 rounded-full text-xs">Printing</span>';
+            else statusBadgeHtml = '<span class="px-2 py-1 bg-gray-700 text-gray-300 rounded-full text-xs">' + order.status + '</span>';
+
+            let actionHtml = '';
+            if (order.status !== 'completed') {
+              actionHtml = `
+                <select class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs focus:ring-indigo-500 focus:border-indigo-500 text-white" onchange="updateOrderStatus('${order.orderId}', this.value)">
+                  <option value="${order.status}" selected disabled>${order.status}</option>
+                  <option value="pending">Pending</option>
+                  <option value="printing">Printing</option>
+                  <option value="ready_for_pickup">Ready for Pickup</option>
+                  <option value="completed">Completed</option>
+                </select>
+              `;
+            }
+
+            tr.innerHTML = `
+              <td class="px-4 py-3 font-mono text-gray-300">${order.orderId.substring(0,8)}</td>
+              <td class="px-4 py-3 text-gray-400">${new Date(order.createdAt).toLocaleDateString()}</td>
+              <td class="px-4 py-3 text-gray-300 max-w-[150px] truncate" title="${order.originalFileName || 'Doc'}">${order.originalFileName || 'Doc'}</td>
+              <td class="px-4 py-3 font-bold text-green-400">₹${(order.amount * 0.9).toFixed(2)}</td>
+              <td class="px-4 py-3">${statusBadgeHtml}</td>
+              <td class="px-4 py-3">${actionHtml}</td>
+            `;
+            ordersTbody.appendChild(tr);
+          });
+        } else {
+          ordersEmpty.classList.remove('hidden');
+        }
+      } catch (e) {
+        console.error(e);
+        ordersLoading.classList.add('hidden');
+        ordersEmpty.classList.remove('hidden');
+        ordersEmpty.innerText = 'Failed to load orders.';
+      }
+    }
+
+    window.updateOrderStatus = async function(orderId, newStatus) {
+      const token = document.getElementById('access-token').value;
+      if (!token) return;
+      
+      try {
+        const res = await fetch(`https://www.funprinting.store/api/partner/orders/${orderId}`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+          loadOrders(); // Refresh table
+        } else {
+          alert('Failed to update status');
+        }
+      } catch (e) {
+        alert('Network error');
+      }
+    }
 
     // Handle Updates
     checkUpdateBtn.addEventListener('click', () => {
