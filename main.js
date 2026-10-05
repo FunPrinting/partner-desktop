@@ -120,6 +120,18 @@ ipcMain.handle('get-queue', async () => {
   return [];
 });
 
+ipcMain.on('clear-data', (event) => {
+  try {
+    const printQueue = require('./chrome-queue');
+    printQueue.clearQueue();
+    if (socket) socket.disconnect();
+    token = null;
+    console.log("App data and queue cleared successfully");
+  } catch(e) {
+    console.error("Failed to clear app data", e);
+  }
+});
+
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
 });
