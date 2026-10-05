@@ -387,7 +387,9 @@
         if (data.success && data.orders.length > 0) {
           processFetchedOrdersForQueue(data.orders);
           renderOrdersToTable(data.orders);
+          ordersEmpty.classList.add('hidden');
         } else {
+          ordersTbody.innerHTML = '';
           ordersEmpty.classList.remove('hidden');
         }
       } catch (e) {
