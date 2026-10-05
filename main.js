@@ -667,36 +667,13 @@ async function startAIMDPrinting(job) {
              }
            });
         } else {
-           console.log(`🌐 Using System Default Plugin on printer: ${activePrinterName || 'System Default'}`);
-           if (process.platform === 'win32') {
-             const ptp = require('pdf-to-printer');
-             
-             // The user specifically requested Chrome Automated Printing
-             // We use Chrome's built-in headless/kiosk printing mode for perfect rendering
-             // This replaces the complex Printer-API SendKeys macros with a professional, simple approach
-             console.log(`⚡ Launching Chrome Automated Print Engine...`);
-             const { exec } = require('child_process');
-             const util = require('util');
-             const execAsync = util.promisify(exec);
-             
-             try {
-               let printCmd;
-               const fileUrl = `file:///${finalPdfPath.replace(/\\/g, '/')}`;
-               const browserBin = activePrintBrowser === 'msedge' ? 'msedge' : (activePrintBrowser === 'brave' ? 'brave' : 'chrome');
-               
-               if (activePrinterName) {
-                 // Set temporary default printer, print via Browser, then restore
-                 printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${browserBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden; Start-Sleep -Seconds 5; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
-               } else {
-                 printCmd = `powershell -Command "Start-Process -FilePath '${browserBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden"`;
-               }
-               await execAsync(printCmd);
-               console.log(`✅ ${browserBin} automated printing executed successfully.`);
-             } catch (chromeError) {
-               console.warn(`⚠️ ${activePrintBrowser} printing failed, falling back to pdf-to-printer plugin:`, chromeError);
+             console.log(`🌐 Using System Default Plugin (pdf-to-printer) on printer: ${activePrinterName || 'System Default'}`);
+             if (process.platform === 'win32') {
+               const ptp = require('pdf-to-printer');
                const options = activePrinterName ? { printer: activePrinterName } : {};
+               console.log('⚡ Calling pdf-to-printer module API...');
                await ptp.print(finalPdfPath, options);
-             }
+               console.log('✅ pdf-to-printer executed successfully.');
              
            } else {
              // Mac/Linux

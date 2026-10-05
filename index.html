@@ -1094,8 +1094,8 @@
       const printer = printersCache.find(p => p.name === printerName);
       if (printer) {
         // Common Electron Printer Statuses: 0 is usually ready/idle on Windows/Linux
-        // If status is non-zero, we should warn the user. (3 means printing, 1 means paused, 2 means error, etc on some platforms)
-        if (printer.status !== 0) {
+        // If status is explicitly a non-zero number, we should warn the user.
+        if (typeof printer.status === 'number' && printer.status !== 0) {
            const proceed = confirm(`Warning: The printer "${printer.name}" returned a non-ready status code (${printer.status}). It might be offline, out of paper, or currently busy.\n\nDo you still want to make it the active printer?`);
            if (!proceed) return;
         }
