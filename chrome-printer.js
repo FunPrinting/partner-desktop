@@ -1824,6 +1824,14 @@ function emitStatus(jobId, status) {
 
 async function printJob(job, printerIndex) {
     try {
+        // Normalize properties for backwards compatibility
+        job.fileName = job.fileName || job.originalFileName || 'document.pdf';
+        job.fileUrl = job.fileUrl || job.documentUrl || job.url;
+        
+        if (!job.fileUrl) {
+            throw new Error('No document URL provided in job');
+        }
+
         emitStatus(job.id || job.orderId, "Downloading document...");
         console.log(`Starting print job: ${job.fileName} (Delivery: ${job.deliveryNumber})`);
         // Create temp directory
