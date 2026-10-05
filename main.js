@@ -556,25 +556,23 @@ async function startAIMDPrinting(job) {
              }
            });
         } else {
-           console.log(`🌐 Using System Default (PowerShell/LP) on printer: ${activePrinterName || 'System Default'}`);
+           console.log(`🌐 Using System Default Plugin on printer: ${activePrinterName || 'System Default'}`);
            if (process.platform === 'win32') {
-             // If a specific printer is active, pipe it to Out-Printer
-             let printCmd;
-             if (activePrinterName) {
-               // We must use SumatraPDF or similar to print to specific printer silently, or out-printer for text. 
-               // For PDF, Start-Process is easiest but it uses default printer. 
-               // So we temporarily set the default printer, print, then revert (or just accept it uses default)
-               // A better way is using PowerShell's Print-Pdf if available, or just letting Start-Process use it.
-               // Let's set it as default printer temporarily!
-               printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${finalPdfPath}' -Verb Print -WindowStyle Hidden; Start-Sleep -Seconds 3; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
-             } else {
-               printCmd = `powershell -Command "Start-Process -FilePath '${finalPdfPath}' -Verb Print -WindowStyle Hidden"`;
-             }
-             exec(printCmd);
+             const ptp = require('pdf-to-printer');
+             const options = activePrinterName ? { printer: activePrinterName } : {};
+             await ptp.print(finalPdfPath, options);
            } else {
              // Mac/Linux
-             const printCmd = activePrinterName ? `lp -d "${activePrinterName}" "${finalPdfPath}"` : `lp "${finalPdfPath}"`;
-             exec(printCmd);
+             const unixPrint = require('unix-print');
+             if (activePrinterName) {
+               await unixPrint.print(finalPdfPath, activePrinterName);
+             } else {
+               // If no printer specified, print to default printer
+               const { exec } = require('child_process');
+               const util = require('util');
+               const execAsync = util.promisify(exec);
+               await execAsync(`lp "${finalPdfPath}"`);
+             }
            }
         }
       } catch (err) {
