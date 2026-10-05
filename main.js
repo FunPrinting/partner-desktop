@@ -228,19 +228,33 @@ ipcMain.on('open-order-window', (event, order) => {
     backgroundColor: '#f9fafb'
   });
 
-  // Force PDFs to display inline instead of downloading by modifying response headers
+  // Force PDFs to display inline in the preview iframe, but allow downloads in new tabs
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const url = details.url;
     let headers = details.responseHeaders;
     
     // Only intercept for likely document URLs
-    if (url.includes('cloudinary.com') || url.includes('firebasestorage') || url.includes('.pdf')) {
+    if (url.includes('cloudinary.com') || url.includes('firebasestorage') || url.includes('r2.cloudflarestorage') || url.includes('.pdf') || url.includes('storage')) {
       if (headers) {
-        if (headers['content-disposition']) {
-          headers['content-disposition'] = ['inline'];
-        }
-        if (headers['Content-Disposition']) {
-          headers['Content-Disposition'] = ['inline'];
+        // If loaded inside the preview iframe, force inline
+        if (details.resourceType === 'subFrame') {
+          if (headers['content-disposition']) headers['content-disposition'] = ['inline'];
+          if (headers['Content-Disposition']) headers['Content-Disposition'] = ['inline'];
+          
+          // Force content-type to application/pdf to ensure browser viewer loads it
+          if (headers['content-type'] && headers['content-type'][0].includes('octet-stream')) {
+             headers['content-type'] = ['application/pdf'];
+          }
+          if (headers['Content-Type'] && headers['Content-Type'][0].includes('octet-stream')) {
+             headers['Content-Type'] = ['application/pdf'];
+          }
+        } 
+        // If loaded in a new tab (Download button), force attachment and proper filename
+        else if (details.resourceType === 'mainFrame' && !url.includes('order-window.html')) {
+          const contentDispStr = `attachment; filename="document.pdf"`;
+          if (headers['content-disposition']) headers['content-disposition'] = [contentDispStr];
+          else if (headers['Content-Disposition']) headers['Content-Disposition'] = [contentDispStr];
+          else headers['Content-Disposition'] = [contentDispStr];
         }
       }
     }

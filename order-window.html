@@ -187,7 +187,10 @@
       document.getElementById('status-order').innerText = (order.status || 'Pending').toUpperCase();
       document.getElementById('status-payment').innerText = order.status === 'pending_payment' ? 'PAYMENT PENDING' : 'PAID';
 
-      const filename = order.originalFileName || order.originalFileNames?.[0] || 'document.pdf';
+      let filename = order.originalFileName || order.originalFileNames?.[0] || 'document';
+      const fileType = order.fileTypes?.[0] || order.fileType || 'pdf';
+      if (!filename.includes('.')) filename = `${filename}.${fileType}`;
+      
       const fileUrl = order.fileURL || order.fileURLs?.[0];
       
       document.getElementById('doc-filename').innerText = filename;
@@ -200,8 +203,10 @@
         if(fileUrl) window.open(fileUrl, '_blank');
       };
 
-      const isPdf = filename.toLowerCase().endsWith('.pdf');
-      const isImage = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
+      const fileType = order.fileTypes?.[0] || order.fileType || 'pdf';
+
+      const isPdf = filename.toLowerCase().endsWith('.pdf') || fileType.toLowerCase() === 'pdf';
+      const isImage = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i) || ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(fileType.toLowerCase());
 
       if (fileUrl && (isPdf || isImage)) {
         frame.src = fileUrl;
