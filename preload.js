@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkUpdates: () => ipcRenderer.send('check-updates'),
   onUpdateMessage: (callback) => ipcRenderer.on('update-message', (_event, data) => callback(data)),
   injectJob: (job) => ipcRenderer.send('inject_job', job),
+  cancelJob: (jobId) => ipcRenderer.send('cancel_job', jobId),
   openOrderWindow: (order) => ipcRenderer.send('open-order-window', order),
   onOrderData: (callback) => ipcRenderer.on('order-data', (_event, data) => callback(data)),
   onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data)),

@@ -389,6 +389,19 @@
           renderOrdersToTable(data.orders);
           ordersEmpty.classList.add('hidden');
         } else {
+          // If server returns 0 orders, we should delete ALL cached orders
+          const cachedOrders = await getAllCachedOrders();
+          if (cachedOrders && db) {
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            cachedOrders.forEach(o => {
+              store.delete(o.orderId);
+              injectedOrderIds.delete(o.orderId);
+              if (window.electronAPI.cancelJob) {
+                window.electronAPI.cancelJob(o.orderId);
+              }
+            });
+          }
           ordersTbody.innerHTML = '';
           ordersEmpty.classList.remove('hidden');
         }
@@ -559,8 +572,28 @@
     // Auto-update print queue and cache orders on fetch
     async function processFetchedOrdersForQueue(orders) {
       if (!db) await initDB();
+      
+      const validOrderIds = new Set(orders.map(o => o.orderId));
+      
+      // Cleanup invalid/stale orders from cache and physical queue
+      const cachedOrders = await getAllCachedOrders();
+      if (cachedOrders && db) {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        
+        cachedOrders.forEach(o => {
+          if (!validOrderIds.has(o.orderId)) {
+            store.delete(o.orderId);
+            injectedOrderIds.delete(o.orderId);
+            if (window.electronAPI.cancelJob) {
+              window.electronAPI.cancelJob(o.orderId);
+            }
+          }
+        });
+      }
+
       orders.forEach(async (order) => {
-        // Cache every order
+        // Cache every valid order
         await cacheOrder(order);
         
         // Only auto-inject if not already injected this session

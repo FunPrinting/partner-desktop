@@ -230,6 +230,16 @@ ipcMain.on('inject_job', async (event, job) => {
   processIncomingJob(job, 'Local UI');
 });
 
+ipcMain.on('cancel_job', async (event, jobId) => {
+  console.log(`🛑 Cancelling job from Local UI: ${jobId}`);
+  try {
+    const printQueue = require('./chrome-queue');
+    printQueue.removeJob(jobId);
+  } catch (err) {
+    console.error('Failed to remove job from queue:', err);
+  }
+});
+
 let orderWindows = {};
 
 ipcMain.on('open-order-window', (event, order) => {
