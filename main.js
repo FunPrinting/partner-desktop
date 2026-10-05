@@ -173,6 +173,12 @@ app.whenReady().then(() => {
       callback(false);
     }
   });
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    if (permission === 'geolocation') {
+      return true;
+    }
+    return false;
+  });
 
   queuePath = path.join(app.getPath('userData'), 'print-queue.json');
   createWindow();
