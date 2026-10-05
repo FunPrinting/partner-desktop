@@ -446,12 +446,7 @@
     }
 
     // Modal UI logic
-    let currentDetailedOrder = null;
-    const orderDetailsModal = document.getElementById('order-details-modal');
-    
-    document.getElementById('close-order-details-btn').addEventListener('click', () => {
-      orderDetailsModal.classList.add('hidden');
-    });
+
 
     window.openOrderDetails = async function(encodedOrder) {
       const order = JSON.parse(decodeURIComponent(encodedOrder));
@@ -462,31 +457,6 @@
       // Open new window
       window.electronAPI.openOrderWindow(order);
     };
-
-    document.getElementById('detail-status-select').addEventListener('change', (e) => {
-      if (currentDetailedOrder) {
-        updateOrderStatus(currentDetailedOrder.orderId, e.target.value);
-        currentDetailedOrder.status = e.target.value;
-        cacheOrder(currentDetailedOrder); // update cache
-      }
-    });
-
-    document.getElementById('detail-print-btn').addEventListener('click', () => {
-      if (currentDetailedOrder) {
-        // Send to Print Queue
-        const job = {
-          jobId: currentDetailedOrder.orderId,
-          orderId: currentDetailedOrder.orderId,
-          url: currentDetailedOrder.fileURL || (currentDetailedOrder.fileURLs ? currentDetailedOrder.fileURLs[0] : null),
-          options: currentDetailedOrder.printingOptions,
-          customer: currentDetailedOrder.customerInfo
-        };
-        window.electronAPI.injectJob(job);
-        
-        alert('Order injected into Local Print Queue for processing!');
-        orderDetailsModal.classList.add('hidden');
-      }
-    });
 
     // Auto-update print queue and cache orders on fetch
     async function processFetchedOrdersForQueue(orders) {
