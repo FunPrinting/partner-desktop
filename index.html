@@ -165,6 +165,36 @@
             <label class="block text-sm font-medium text-gray-300 mb-1">ZIP / Pincode</label>
             <input type="text" id="set-zip" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="110001">
           </div>
+
+          <div class="border-t border-gray-700 pt-4 mt-4">
+            <label class="block text-sm font-bold text-indigo-400 mb-3">Service Pricing (₹)</label>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">B&W (Per Page)</label>
+                <input type="number" id="set-price-bw" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="2">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Color (Per Page)</label>
+                <input type="number" id="set-price-color" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="10">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Binding (Fixed)</label>
+                <input type="number" id="set-price-binding" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="40">
+              </div>
+            </div>
+          </div>
+
+          <div class="border-t border-gray-700 pt-4 mt-4 flex items-center justify-between">
+            <div>
+              <label class="block text-sm font-bold text-indigo-400">Taking Orders (Currently Active)</label>
+              <p class="text-xs text-gray-400 mt-1">Turn this on to appear on the customer map and receive orders.</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="set-is-online" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+            </label>
+          </div>
+
           <div class="grid grid-cols-2 gap-4 border-t border-gray-700 pt-4 mt-4">
             <div class="col-span-2 flex justify-between items-center">
               <label class="block text-sm font-bold text-indigo-400">Shop Location (Coordinates)</label>
@@ -495,6 +525,14 @@
             document.getElementById('set-lng').value = data.partner.location.coordinates[0];
             document.getElementById('set-lat').value = data.partner.location.coordinates[1];
           }
+          if (data.partner.pricing) {
+            document.getElementById('set-price-bw').value = data.partner.pricing.perPageBW || 2;
+            document.getElementById('set-price-color').value = data.partner.pricing.perPageColor || 10;
+            document.getElementById('set-price-binding').value = data.partner.pricing.binding || 40;
+          }
+          if (data.partner.isOnline !== undefined) {
+            document.getElementById('set-is-online').checked = data.partner.isOnline;
+          }
           
           const dpContainer = document.getElementById('dp-container');
           dpContainer.innerHTML = '';
@@ -682,6 +720,12 @@
           state: document.getElementById('set-state').value,
           zipCode: document.getElementById('set-zip').value
         },
+        pricing: {
+          perPageBW: parseFloat(document.getElementById('set-price-bw').value) || 2,
+          perPageColor: parseFloat(document.getElementById('set-price-color').value) || 10,
+          binding: parseFloat(document.getElementById('set-price-binding').value) || 40
+        },
+        isOnline: document.getElementById('set-is-online').checked,
         deliveryPoints: dps
       };
 
