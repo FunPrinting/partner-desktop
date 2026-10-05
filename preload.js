@@ -11,14 +11,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOAuthSuccess: (callback) => ipcRenderer.on('oauth-success', (_event, data) => callback(data)),
   checkUpdates: () => ipcRenderer.send('check-updates'),
   onUpdateMessage: (callback) => ipcRenderer.on('update-message', (_event, data) => callback(data)),
-  setPrintEngine: (engine) => ipcRenderer.send('set_engine', engine),
   injectJob: (job) => ipcRenderer.send('inject_job', job),
   openOrderWindow: (order) => ipcRenderer.send('open-order-window', order),
   onOrderData: (callback) => ipcRenderer.on('order-data', (_event, data) => callback(data)),
   onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data)),
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName),
-  setPaths: (paths) => ipcRenderer.send('set_paths', paths),
-  scanSystemEngines: () => ipcRenderer.invoke('scan-system-engines'),
   getQueue: () => ipcRenderer.invoke('get-queue')
 });
