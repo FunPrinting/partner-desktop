@@ -230,6 +230,11 @@
             <label class="block text-sm font-medium text-gray-600 mb-1">ZIP / Pincode</label>
             <input type="text" id="set-zip" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900" placeholder="110001">
           </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">Shop Phone Numbers</label>
+            <input type="text" id="set-phone-numbers" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900" placeholder="e.g. +919876543210, 080-12345678">
+            <p class="text-xs text-gray-500 mt-1">Comma-separated. Shown to all customers.</p>
+          </div>
 
           <div class="border-t border-gray-200 pt-4 mt-4">
             <label class="block text-sm font-bold text-blue-600 mb-3">Service Pricing (₹)</label>
@@ -879,19 +884,20 @@
     
 
     
-    function addDeliveryPointUI(name = '', lat = '', lng = '') {
+    function addDeliveryPointUI(name = '', lat = '', lng = '', contactNumber = '') {
       const dpContainer = document.getElementById('dp-container');
       const div = document.createElement('div');
-      div.className = "flex gap-2 items-center bg-gray-50/50 p-2 rounded border border-gray-200";
+      div.className = "flex gap-2 items-start bg-gray-50/50 p-2 rounded border border-gray-200 flex-col sm:flex-row";
       div.innerHTML = `
-        <div class="flex-1">
-          <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 mb-1" value="${name}">
+        <div class="flex-1 w-full space-y-2">
+          <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${name}">
+          <input type="text" placeholder="Contact Number (Optional)" class="dp-contact w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${contactNumber}">
           <div class="flex gap-2">
             <input type="number" step="any" placeholder="Lat" class="dp-lat w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${lat}">
             <input type="number" step="any" placeholder="Lng" class="dp-lng w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${lng}">
           </div>
         </div>
-        <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2">✕</button>
+        <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
       `;
       dpContainer.appendChild(div);
     }
@@ -936,11 +942,17 @@
           // We don't forcefully override here anymore because scanAndUpdateEnginesUI handles restoring saved values
           // only if they are actually installed on the system!
           
+          if (data.partner.phoneNumbers) {
+            document.getElementById('set-phone-numbers').value = data.partner.phoneNumbers.join(', ');
+          } else {
+            document.getElementById('set-phone-numbers').value = '';
+          }
+          
           const dpContainer = document.getElementById('dp-container');
           dpContainer.innerHTML = '';
           if (data.partner.deliveryPoints) {
             data.partner.deliveryPoints.forEach(dp => {
-              addDeliveryPointUI(dp.name, dp.location.coordinates[1], dp.location.coordinates[0]);
+              addDeliveryPointUI(dp.name, dp.location.coordinates[1], dp.location.coordinates[0], dp.contactNumber || '');
             });
           }
         }
@@ -1097,6 +1109,7 @@
       const dps = Array.from(document.getElementById('dp-container').children).map(div => {
         return {
           name: div.querySelector('.dp-name').value,
+          contactNumber: div.querySelector('.dp-contact')?.value || '',
           location: {
             type: 'Point',
             coordinates: [
@@ -1106,6 +1119,9 @@
           }
         };
       }).filter(dp => dp.name);
+
+      const phoneNumbersRaw = document.getElementById('set-phone-numbers').value;
+      const phoneNumbers = phoneNumbersRaw ? phoneNumbersRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
       const payload = {
         businessName: document.getElementById('set-business-name').value,
@@ -1128,7 +1144,8 @@
           binding: parseFloat(document.getElementById('set-price-binding').value) || 40
         },
         isOnline: document.getElementById('set-is-online').checked,
-        deliveryPoints: dps
+        deliveryPoints: dps,
+        phoneNumbers: phoneNumbers
       };
 
 
