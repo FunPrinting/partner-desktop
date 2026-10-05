@@ -209,7 +209,7 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
   
-  // Phase 1: Recover Jobs on Boot
+  // Phase 1: Recover Jobs on Boot (Server side processing)
   setTimeout(async () => {
     if (fs.existsSync(queuePath)) {
       try {
@@ -217,7 +217,6 @@ app.whenReady().then(() => {
         if (queue.length > 0) {
           console.log(`♻️ Recovered ${queue.length} pending jobs from disk!`);
           for (const job of queue) {
-             mainWindow.webContents.send('incoming_job', job);
              await startAIMDPrinting(job);
           }
         }
@@ -225,7 +224,18 @@ app.whenReady().then(() => {
         console.error("Failed to load queue", e);
       }
     }
-  }, 3000); // Wait for UI to load
+  }, 3000); 
+});
+
+ipcMain.handle('get-queue', async () => {
+  try {
+    if (fs.existsSync(queuePath)) {
+      return JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+    }
+  } catch (e) {
+    console.error("Failed to read queue for UI", e);
+  }
+  return [];
 });
 
 app.on('window-all-closed', function () {

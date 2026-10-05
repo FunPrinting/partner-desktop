@@ -19,5 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName),
   setPaths: (paths) => ipcRenderer.send('set_paths', paths),
-  scanSystemEngines: () => ipcRenderer.invoke('scan-system-engines')
+  scanSystemEngines: () => ipcRenderer.invoke('scan-system-engines'),
+  getQueue: () => ipcRenderer.invoke('get-queue')
 });

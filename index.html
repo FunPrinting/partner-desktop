@@ -332,7 +332,20 @@
       if (!token) return;
       
       ordersTbody.innerHTML = '';
-      ordersLoading.classList.remove('hidden');
+      
+      // Load instantly from cache first
+      try {
+        const cachedOrders = await getAllCachedOrders();
+        if (cachedOrders && cachedOrders.length > 0) {
+          cachedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          renderOrdersToTable(cachedOrders);
+        } else {
+          ordersLoading.classList.remove('hidden');
+        }
+      } catch (e) {
+        ordersLoading.classList.remove('hidden');
+      }
+      
       ordersEmpty.classList.add('hidden');
 
       try {
@@ -345,50 +358,70 @@
         
         if (data.success && data.orders.length > 0) {
           processFetchedOrdersForQueue(data.orders);
-          data.orders.forEach(order => {
-            const tr = document.createElement('tr');
-            tr.className = "hover:bg-white/50 transition-colors";
-            
-            let statusBadgeHtml = '';
-            if (order.status === 'completed') statusBadgeHtml = '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">Completed</span>';
-            else if (order.status === 'ready_for_pickup') statusBadgeHtml = '<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 rounded-full text-xs">Ready</span>';
-            else if (order.status === 'printing') statusBadgeHtml = '<span class="px-2 py-1 bg-blue-900/50 text-blue-400 rounded-full text-xs">Printing</span>';
-            else statusBadgeHtml = '<span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">' + order.status + '</span>';
-
-            let actionHtml = '';
-            if (order.status !== 'completed') {
-              actionHtml = `
-                <select class="bg-white border border-gray-600 rounded px-2 py-1 text-xs focus:ring-indigo-500 focus:border-blue-500 text-gray-900" onchange="updateOrderStatus('${order.orderId}', this.value)">
-                  <option value="${order.status}" selected disabled>${order.status}</option>
-                  <option value="pending">Pending</option>
-                  <option value="printing">Printing</option>
-                  <option value="ready_for_pickup">Ready for Pickup</option>
-                  <option value="completed">Completed</option>
-                </select>
-              `;
-            }
-
-            const encodedOrder = encodeURIComponent(JSON.stringify(order));
-            tr.innerHTML = `
-              <td class="px-4 py-3 font-mono text-gray-600 cursor-pointer" onclick="openOrderDetails('${encodedOrder}')">${order.orderId.substring(0,8)}</td>
-              <td class="px-4 py-3 font-mono text-gray-600">${order.orderId.substring(0,8)}</td>
-              <td class="px-4 py-3 text-gray-500">${new Date(order.createdAt).toLocaleDateString()}</td>
-              <td class="px-4 py-3 text-gray-600 max-w-[150px] truncate" title="${order.originalFileName || 'Doc'}">${order.originalFileName || 'Doc'}</td>
-              <td class="px-4 py-3 font-bold text-green-700">₹${(order.amount * 0.9).toFixed(2)}</td>
-              <td class="px-4 py-3">${statusBadgeHtml}</td>
-              <td class="px-4 py-3">${actionHtml}</td>
-            `;
-            ordersTbody.appendChild(tr);
-          });
+          renderOrdersToTable(data.orders);
         } else {
           ordersEmpty.classList.remove('hidden');
         }
       } catch (e) {
-        console.error(e);
-        ordersLoading.classList.add('hidden');
-        ordersEmpty.classList.remove('hidden');
-        ordersEmpty.innerText = 'Failed to load orders.';
+        console.error("Network fetch failed, attempting to load from cache:", e);
+        try {
+          const cachedOrders = await getAllCachedOrders();
+          if (cachedOrders && cachedOrders.length > 0) {
+            ordersLoading.classList.add('hidden');
+            ordersEmpty.classList.add('hidden');
+            // Sort by most recent first
+            cachedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            renderOrdersToTable(cachedOrders);
+          } else {
+            ordersLoading.classList.add('hidden');
+            ordersEmpty.classList.remove('hidden');
+            ordersEmpty.innerText = 'Offline and no cached orders found.';
+          }
+        } catch (cacheErr) {
+          ordersLoading.classList.add('hidden');
+          ordersEmpty.classList.remove('hidden');
+          ordersEmpty.innerText = 'Failed to load orders (Offline).';
+        }
       }
+    }
+
+    function renderOrdersToTable(orders) {
+      ordersTbody.innerHTML = '';
+      orders.forEach(order => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-white/50 transition-colors";
+        
+        let statusBadgeHtml = '';
+        if (order.status === 'completed') statusBadgeHtml = '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">Completed</span>';
+        else if (order.status === 'ready_for_pickup') statusBadgeHtml = '<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 rounded-full text-xs">Ready</span>';
+        else if (order.status === 'printing') statusBadgeHtml = '<span class="px-2 py-1 bg-blue-900/50 text-blue-400 rounded-full text-xs">Printing</span>';
+        else statusBadgeHtml = '<span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">' + order.status + '</span>';
+
+        let actionHtml = '';
+        if (order.status !== 'completed') {
+          actionHtml = `
+            <select class="bg-white border border-gray-600 rounded px-2 py-1 text-xs focus:ring-indigo-500 focus:border-blue-500 text-gray-900" onchange="updateOrderStatus('${order.orderId}', this.value)">
+              <option value="${order.status}" selected disabled>${order.status}</option>
+              <option value="pending">Pending</option>
+              <option value="printing">Printing</option>
+              <option value="ready_for_pickup">Ready for Pickup</option>
+              <option value="completed">Completed</option>
+            </select>
+          `;
+        }
+
+        const encodedOrder = encodeURIComponent(JSON.stringify(order));
+        tr.innerHTML = `
+          <td class="px-4 py-3 font-mono text-gray-600 cursor-pointer" onclick="openOrderDetails('${encodedOrder}')">${order.orderId.substring(0,8)}</td>
+          <td class="px-4 py-3 font-mono text-gray-600">${order.orderId.substring(0,8)}</td>
+          <td class="px-4 py-3 text-gray-500">${new Date(order.createdAt).toLocaleDateString()}</td>
+          <td class="px-4 py-3 text-gray-600 max-w-[150px] truncate" title="${order.originalFileName || 'Doc'}">${order.originalFileName || 'Doc'}</td>
+          <td class="px-4 py-3 font-bold text-green-700">₹${(order.amount * 0.9).toFixed(2)}</td>
+          <td class="px-4 py-3">${statusBadgeHtml}</td>
+          <td class="px-4 py-3">${actionHtml}</td>
+        `;
+        ordersTbody.appendChild(tr);
+      });
     }
 
     
@@ -433,6 +466,17 @@
         const transaction = db.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.get(orderId);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    async function getAllCachedOrders() {
+      if (!db) await initDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
         request.onsuccess = () => resolve(request.result);
         request.onerror = (e) => reject(e);
       });
@@ -544,6 +588,15 @@
         loginBtn.innerHTML = "Connecting Engine...";
         window.electronAPI.login({ partnerId: savedPartnerId, token: savedToken });
       }
+
+      // Recover print queue immediately
+      if (window.electronAPI.getQueue) {
+        window.electronAPI.getQueue().then(queue => {
+          if (queue && queue.length > 0) {
+            queue.forEach(job => renderJobCard(job));
+          }
+        }).catch(err => console.error("Failed to load initial queue", err));
+      }
     });
 
     // Handle successful authentication (separate from WSS connection)
@@ -624,7 +677,7 @@
     });
 
     // Handle Incoming Print Job
-    window.electronAPI.onIncomingJob((job) => {
+    function renderJobCard(job) {
       // Remove empty state if present
       if(queueContainer.children.length === 1 && queueContainer.children[0].tagName === 'DIV' && queueContainer.children[0].classList.contains('justify-center')) {
         queueContainer.innerHTML = '';
@@ -671,7 +724,9 @@
         </div>
       `;
       queueContainer.prepend(jobCard);
-    });
+    }
+
+    window.electronAPI.onIncomingJob(renderJobCard);
 
     // Handle AIMD Print Status Updates
     window.electronAPI.onPrintStatus((data) => {
