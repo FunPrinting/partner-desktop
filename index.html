@@ -612,6 +612,21 @@
       });
     }
 
+    if (window.electronAPI.onJobCancelled) {
+      window.electronAPI.onJobCancelled((jobId) => {
+        console.log(`[Cancel] Removing cancelled order ${jobId} from local cache`);
+        if (db) {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          store.delete(jobId);
+        }
+        // If the orders modal is open, refresh the view
+        if (!document.getElementById('orders-modal').classList.contains('hidden')) {
+          loadOrders();
+        }
+      });
+    }
+
     // Handle Updates
     checkUpdateBtn.addEventListener('click', () => {
       window.electronAPI.checkUpdates();

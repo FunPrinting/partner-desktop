@@ -441,11 +441,20 @@ function setOnJobCompleteCallback(callback) {
 /**
  * Clear queue (use with caution)
  */
+function removeJob(jobId) {
+    const initialLength = printQueue.length;
+    printQueue = printQueue.filter(j => j.id !== jobId && (j.job && j.job.orderId !== jobId));
+    if (printQueue.length < initialLength) {
+        saveQueue();
+        console.log(`🗑️ Removed job ${jobId} from queue`);
+    }
+}
 function clearQueue() {
     printQueue = [];
     saveQueue();
     console.log('Queue cleared');
 }
+exports.removeJob = removeJob;
 exports.setOnJobCompleteCallback = setOnJobCompleteCallback;
 // Load queue on startup
 loadQueue();

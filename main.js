@@ -436,8 +436,23 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   socket.off('remote_control_action');
   socket.off('reconnect_failed');
 
+  socket.off('cancel_print_job');
+
   socket.on('new_print_job', async (job) => {
     processIncomingJob(job, 'WSS Cloud');
+  });
+
+  socket.on('cancel_print_job', async (data) => {
+    console.log(`🛑 Received cancel request for job ${data.jobId}`);
+    try {
+      const printQueue = require('./chrome-queue');
+      printQueue.removeJob(data.jobId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('job-cancelled', data.jobId);
+      }
+    } catch(e) {
+      console.error("Failed to cancel job", e);
+    }
   });
 
   socket.on('connect_error', (err) => {
