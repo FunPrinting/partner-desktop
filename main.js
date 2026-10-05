@@ -81,7 +81,8 @@ app.on('window-all-closed', function () {
 });
 
 // Auto Updater Events
-ipcMain.on('inject_job', async (event, job) => {
+// Helper function to process an incoming job, handling multiple files
+function processIncomingJob(job, source) {
   const printQueue = require('./chrome-queue');
   
   // Check if this order is already in the queue to prevent duplicates
@@ -94,31 +95,83 @@ ipcMain.on('inject_job', async (event, job) => {
     return;
   }
 
-  console.log('📥 Job Injected to Advanced Queue:', job.jobId);
+  console.log(`📥 Job Injected to Advanced Queue (${source}):`, job.jobId);
   
-  const apiJob = {
-    orderId: job.orderId || job.jobId,
-    fileUrl: job.url,
-    fileName: job.url ? job.url.split('/').pop().split('?')[0] : 'document.pdf',
-    fileType: 'pdf',
-    printingOptions: job.options || {
-      pageSize: 'A4',
-      color: 'bw',
-      sided: 'single',
-      copies: 1
-    },
-    orderDetails: job.orderDetails,
-    customerInfo: job.customer
-  };
+  const hasMultipleFiles = job.fileURLs && job.fileURLs.length > 0;
   
-  if (job.options && job.options.isMonochrome) {
-    apiJob.printingOptions.color = 'bw';
-  } else if (job.options && job.options.isMonochrome === false) {
-    apiJob.printingOptions.color = 'color';
+  if (hasMultipleFiles) {
+    for (let i = 0; i < job.fileURLs.length; i++) {
+      const apiJob = {
+        orderId: job.orderId || job.jobId,
+        fileUrl: job.fileURLs[i],
+        fileName: job.originalFileNames ? job.originalFileNames[i] : `File ${i + 1}`,
+        fileType: job.fileTypes ? job.fileTypes[i] : 'pdf',
+        printingOptions: job.options || {
+          pageSize: 'A4',
+          color: 'bw',
+          sided: 'single',
+          copies: 1
+        },
+        orderDetails: job.orderDetails,
+        customerInfo: job.customer
+      };
+      
+      if (job.options && job.options.isMonochrome) {
+        apiJob.printingOptions.color = 'bw';
+      } else if (job.options && job.options.isMonochrome === false) {
+        apiJob.printingOptions.color = 'color';
+      }
+      
+      printQueue.addToQueue(apiJob, 0); // 0 is default printer index
+      
+      // Update UI for each file as a separate print job
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const uiJob = {
+          ...job,
+          jobId: `${job.jobId}-${i+1}`
+        };
+        // Safely set options so UI doesn't crash if options were undefined
+        uiJob.options = apiJob.printingOptions;
+        mainWindow.webContents.send('incoming_job', uiJob);
+      }
+    }
+  } else {
+    // Legacy: Single file mode
+    const fileUrl = job.url || job.documentUrl;
+    const apiJob = {
+      orderId: job.orderId || job.jobId,
+      fileUrl: fileUrl,
+      fileName: job.originalFileName || (fileUrl ? fileUrl.split('/').pop().split('?')[0] : 'document.pdf'),
+      fileType: 'pdf',
+      printingOptions: job.options || {
+        pageSize: 'A4',
+        color: 'bw',
+        sided: 'single',
+        copies: 1
+      },
+      orderDetails: job.orderDetails,
+      customerInfo: job.customer
+    };
+    
+    if (job.options && job.options.isMonochrome) {
+      apiJob.printingOptions.color = 'bw';
+    } else if (job.options && job.options.isMonochrome === false) {
+      apiJob.printingOptions.color = 'color';
+    }
+    
+    printQueue.addToQueue(apiJob, 0);
+    
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Safely set options so UI doesn't crash if options were undefined
+      job.options = apiJob.printingOptions;
+      mainWindow.webContents.send('incoming_job', job);
+    }
   }
+}
 
-  printQueue.addToQueue(apiJob, 0);
-  mainWindow.webContents.send('incoming_job', job);
+// Local UI Event
+ipcMain.on('inject_job', async (event, job) => {
+  processIncomingJob(job, 'Local UI');
 });
 
 let orderWindows = {};
@@ -304,33 +357,7 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
   socket.off('reconnect_failed');
 
   socket.on('new_print_job', async (job) => {
-    console.log('📥 New Print Job Received by Advanced Queue:', job.jobId);
-    
-    const printQueue = require('./chrome-queue');
-    
-    const apiJob = {
-      orderId: job.orderId || job.jobId,
-      fileUrl: job.url,
-      fileName: job.originalFileName || (job.url ? job.url.split('/').pop().split('?')[0] : 'document.pdf'),
-      fileType: 'pdf',
-      printingOptions: job.options || {
-        pageSize: 'A4',
-        color: 'bw',
-        sided: 'single',
-        copies: 1
-      },
-      orderDetails: job.orderDetails,
-      customerInfo: job.customer
-    };
-    
-    if (job.options && job.options.isMonochrome) {
-      apiJob.printingOptions.color = 'bw';
-    } else if (job.options && job.options.isMonochrome === false) {
-      apiJob.printingOptions.color = 'color';
-    }
-
-    printQueue.addToQueue(apiJob, 0); // 0 is default printer index
-    mainWindow.webContents.send('incoming_job', job);
+    processIncomingJob(job, 'WSS Cloud');
   });
 
   socket.on('connect_error', (err) => {

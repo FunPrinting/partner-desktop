@@ -220,6 +220,9 @@
           jobId: currentOrder.orderId,
           orderId: currentOrder.orderId,
           url: currentOrder.fileURL || (currentOrder.fileURLs ? currentOrder.fileURLs[0] : null),
+          fileURLs: currentOrder.fileURLs,
+          originalFileNames: currentOrder.originalFileNames,
+          fileTypes: currentOrder.fileTypes,
           options: currentOrder.printingOptions,
           customer: currentOrder.customerInfo,
           orderDetails: currentOrder

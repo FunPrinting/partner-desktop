@@ -685,9 +685,9 @@
             </p>
           </div>
           <div class="text-right text-sm text-gray-600">
-            <p><span class="text-gray-500">Size:</span> ${job.options.pageSize}</p>
-            <p><span class="text-gray-500">Color:</span> ${job.options.color}</p>
-            <p><span class="text-gray-500">Sided:</span> ${job.options.sided}</p>
+            <p><span class="text-gray-500">Size:</span> ${job.options?.pageSize || 'A4'}</p>
+            <p><span class="text-gray-500">Color:</span> ${job.options?.color || 'bw'}</p>
+            <p><span class="text-gray-500">Sided:</span> ${job.options?.sided || 'single'}</p>
           </div>
         </div>
         
