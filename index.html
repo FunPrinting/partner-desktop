@@ -231,15 +231,22 @@
           </div>
 
           <div class="border-t border-gray-700 pt-4 mt-4">
-            <label class="block text-sm font-bold text-indigo-400 mb-3">System Paths (Advanced)</label>
+            <label class="block text-sm font-bold text-indigo-400 mb-3">System Print Engines</label>
             <div class="space-y-3">
               <div>
-                <label class="block text-xs font-medium text-gray-300 mb-1">Google Chrome Executable Path</label>
-                <input type="text" id="set-chrome-path" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="Leave empty for auto-detect (chrome)">
+                <label class="block text-xs font-medium text-gray-300 mb-1">Print Browser Engine</label>
+                <select id="set-print-browser" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white">
+                  <option value="chrome">Google Chrome (Recommended)</option>
+                  <option value="msedge">Microsoft Edge</option>
+                  <option value="brave">Brave Browser</option>
+                </select>
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-300 mb-1">LibreOffice Executable Path</label>
-                <input type="text" id="set-libre-path" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="Leave empty for auto-detect (soffice)">
+                <label class="block text-xs font-medium text-gray-300 mb-1">Word-to-PDF Conversion Engine</label>
+                <select id="set-office-engine" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white">
+                  <option value="libreoffice">LibreOffice (Recommended)</option>
+                  <option value="msword">Microsoft Word</option>
+                </select>
               </div>
             </div>
           </div>
@@ -691,10 +698,10 @@
             document.getElementById('set-is-online').checked = data.partner.isOnline;
           }
           
-          const savedChromePath = localStorage.getItem('chromePath') || '';
-          const savedLibrePath = localStorage.getItem('librePath') || '';
-          document.getElementById('set-chrome-path').value = savedChromePath;
-          document.getElementById('set-libre-path').value = savedLibrePath;
+          const savedBrowser = localStorage.getItem('printBrowser') || 'chrome';
+          const savedOffice = localStorage.getItem('officeEngine') || 'libreoffice';
+          document.getElementById('set-print-browser').value = savedBrowser;
+          document.getElementById('set-office-engine').value = savedOffice;
           
           const dpContainer = document.getElementById('dp-container');
           dpContainer.innerHTML = '';
@@ -891,12 +898,12 @@
         deliveryPoints: dps
       };
 
-      const chromePath = document.getElementById('set-chrome-path').value.trim();
-      const librePath = document.getElementById('set-libre-path').value.trim();
-      localStorage.setItem('chromePath', chromePath);
-      localStorage.setItem('librePath', librePath);
+      const printBrowser = document.getElementById('set-print-browser').value;
+      const officeEngine = document.getElementById('set-office-engine').value;
+      localStorage.setItem('printBrowser', printBrowser);
+      localStorage.setItem('officeEngine', officeEngine);
       if (window.electronAPI.setPaths) {
-        window.electronAPI.setPaths({ chromePath, librePath });
+        window.electronAPI.setPaths({ printBrowser, officeEngine });
       }
 
       saveBtn.innerText = 'Saving...';

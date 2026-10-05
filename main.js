@@ -20,8 +20,8 @@ let token; // For storing auth token
 let oauthServer = null; // Store local oauth server
 
 let selectedPrintEngine = 'native'; // Default
-let customChromePath = '';
-let customLibrePath = '';
+let activePrintBrowser = 'chrome';
+let activeOfficeEngine = 'libreoffice';
 
 // Queue Persistence Path
 let queuePath = '';
@@ -71,21 +71,40 @@ function removeJobFromQueue(jobId) {
 async function convertWordToPdf(inputPath) {
   return new Promise((resolve, reject) => {
     const outDir = path.dirname(inputPath);
-    // Uses LibreOffice headless. Make sure soffice is in PATH or specify custom path.
-    const sofficeBin = customLibrePath || 'soffice';
-    const cmd = process.platform === 'win32' 
-      ? `"${sofficeBin}" --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`
-      : `"${sofficeBin}" --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`;
-      
-    console.log(`🔄 Converting Word to PDF: ${cmd}`);
-    exec(cmd, (error) => {
-      if (error) {
-        console.error("LibreOffice conversion failed. Is it installed?", error);
-        return reject(new Error("LibreOffice is required for .docx printing but is not installed or not in PATH."));
-      }
-      const pdfPath = inputPath.replace(/\.docx?$/i, '.pdf');
-      resolve(pdfPath);
-    });
+    const pdfPath = inputPath.replace(/\.docx?$/i, '.pdf');
+    
+    if (process.platform === 'win32' && activeOfficeEngine === 'msword') {
+      console.log(`🔄 Converting Word to PDF via MS Word COM (PowerShell)...`);
+      const psScript = `
+        $word = New-Object -ComObject Word.Application
+        $word.Visible = $false
+        $doc = $word.Documents.Open("${inputPath}")
+        $doc.SaveAs([ref] "${pdfPath}", [ref] 17)
+        $doc.Close()
+        $word.Quit()
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($word)
+      `;
+      exec(`powershell -Command "${psScript}"`, (error) => {
+        if (error) {
+          console.error("MS Word COM conversion failed", error);
+          return reject(new Error("Failed to convert using Microsoft Word. Is Word installed?"));
+        }
+        resolve(pdfPath);
+      });
+    } else {
+      // LibreOffice (Default)
+      const sofficeBin = 'soffice';
+      const cmd = `"${sofficeBin}" --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`;
+        
+      console.log(`🔄 Converting Word to PDF via LibreOffice: ${cmd}`);
+      exec(cmd, (error) => {
+        if (error) {
+          console.error("LibreOffice conversion failed. Is it installed?", error);
+          return reject(new Error("LibreOffice is required for .docx printing but is not installed or not in PATH."));
+        }
+        resolve(pdfPath);
+      });
+    }
   });
 }
 
@@ -447,9 +466,9 @@ ipcMain.on('set_engine', (event, engine) => {
 });
 
 ipcMain.on('set_paths', (event, paths) => {
-  if (paths.chromePath !== undefined) customChromePath = paths.chromePath;
-  if (paths.librePath !== undefined) customLibrePath = paths.librePath;
-  console.log(`🔧 Custom paths set: Chrome="${customChromePath}", Libre="${customLibrePath}"`);
+  if (paths.printBrowser !== undefined) activePrintBrowser = paths.printBrowser;
+  if (paths.officeEngine !== undefined) activeOfficeEngine = paths.officeEngine;
+  console.log(`🔧 Engines set: Browser="${activePrintBrowser}", Office="${activeOfficeEngine}"`);
 });
 
 // Phase 7: Real AIMD Printing Engine (Hardware Execution)
@@ -580,18 +599,18 @@ async function startAIMDPrinting(job) {
              try {
                let printCmd;
                const fileUrl = `file:///${finalPdfPath.replace(/\\/g, '/')}`;
-               const chromeBin = customChromePath || 'chrome';
+               const browserBin = activePrintBrowser === 'msedge' ? 'msedge' : (activePrintBrowser === 'brave' ? 'brave' : 'chrome');
                
                if (activePrinterName) {
-                 // Set temporary default printer, print via Chrome, then restore
-                 printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${chromeBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden; Start-Sleep -Seconds 5; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
+                 // Set temporary default printer, print via Browser, then restore
+                 printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${browserBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden; Start-Sleep -Seconds 5; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
                } else {
-                 printCmd = `powershell -Command "Start-Process -FilePath '${chromeBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden"`;
+                 printCmd = `powershell -Command "Start-Process -FilePath '${browserBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden"`;
                }
                await execAsync(printCmd);
-               console.log(`✅ Chrome automated printing executed successfully.`);
+               console.log(`✅ ${browserBin} automated printing executed successfully.`);
              } catch (chromeError) {
-               console.warn(`⚠️ Chrome printing failed, falling back to pdf-to-printer plugin:`, chromeError);
+               console.warn(`⚠️ ${activePrintBrowser} printing failed, falling back to pdf-to-printer plugin:`, chromeError);
                const options = activePrinterName ? { printer: activePrinterName } : {};
                await ptp.print(finalPdfPath, options);
              }
