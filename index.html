@@ -517,7 +517,8 @@
             orderId: order.orderId,
             url: order.fileURL || (order.fileURLs ? order.fileURLs[0] : null),
             options: order.printingOptions,
-            customer: order.customerInfo
+            customer: order.customerInfo,
+            orderDetails: order
           };
           window.electronAPI.injectJob(job);
         }
@@ -1157,6 +1158,7 @@
       }
 
       activePrinterName = printerName;
+      localStorage.setItem('activePrinterName', printerName);
       // Tell main process which printer is active
       window.electronAPI.setActivePrinter(printerName);
       loadPrinters(printersCache); // Re-render with the new active state
@@ -1168,6 +1170,11 @@
       const listEl = document.getElementById('printers-list');
       if (!listEl) return;
       
+      // Restore printer from localStorage if available
+      if (!activePrinterName) {
+        activePrinterName = localStorage.getItem('activePrinterName');
+      }
+
       if (!cached) {
         listEl.innerHTML = '<div class="text-sm text-gray-500 text-center py-2">Scanning printers...</div>';
       }
@@ -1186,6 +1193,10 @@
           // If no active printer is set, default to the system default
           if (!activePrinterName && printer.isDefault) {
              activePrinterName = printer.name;
+             localStorage.setItem('activePrinterName', printer.name);
+             window.electronAPI.setActivePrinter(printer.name);
+          } else if (activePrinterName === printer.name) {
+             // Make sure main process knows if we restored from local storage
              window.electronAPI.setActivePrinter(printer.name);
           }
 

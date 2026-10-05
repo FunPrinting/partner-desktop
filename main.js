@@ -528,6 +528,7 @@ let activePrinterName = null; // Store the user-selected printer
 
 ipcMain.on('set_active_printer', (event, printerName) => {
   activePrinterName = printerName;
+  process.env.PRINTER_NAME = printerName;
   console.log(`🖨️ Active printer set to: ${activePrinterName}`);
 });
 
