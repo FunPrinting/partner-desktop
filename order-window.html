@@ -203,8 +203,6 @@
         if(fileUrl) window.open(fileUrl, '_blank');
       };
 
-      const fileType = order.fileTypes?.[0] || order.fileType || 'pdf';
-
       const isPdf = filename.toLowerCase().endsWith('.pdf') || fileType.toLowerCase() === 'pdf';
       const isImage = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i) || ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(fileType.toLowerCase());
 
