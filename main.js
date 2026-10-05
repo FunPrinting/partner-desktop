@@ -215,15 +215,15 @@ app.whenReady().then(() => {
 
 ipcMain.handle('get-queue', async () => {
   try {
-    if (fs.existsSync(queuePath)) {
-      const q = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
-      return q.map(qj => ({
-        jobId: qj.id,
-        orderId: qj.job.orderId || qj.id,
-        url: qj.job.fileUrl,
-        options: qj.job.printingOptions
-      }));
-    }
+    const printQueue = require('./chrome-queue');
+    const status = printQueue.getQueueStatus();
+    return status.jobs.map(qj => ({
+      jobId: qj.job?.orderId || qj.id,
+      orderId: qj.job?.orderId || qj.id,
+      url: qj.job?.fileUrl,
+      options: qj.job?.printingOptions,
+      status: qj.status
+    }));
   } catch (e) {
     console.error("Failed to read queue for UI", e);
   }
@@ -236,14 +236,24 @@ app.on('window-all-closed', function () {
 
 // Auto Updater Events
 ipcMain.on('inject_job', async (event, job) => {
-  console.log('📥 Offline/Recovered Job Injected to Advanced Queue:', job.jobId);
-  
   const printQueue = require('./chrome-queue');
+  
+  // Check if this order is already in the queue to prevent duplicates
+  const queueStatus = printQueue.getQueueStatus();
+  const alreadyQueued = queueStatus.jobs.some(qj => 
+    qj.job && qj.job.orderId === (job.orderId || job.jobId)
+  );
+  if (alreadyQueued) {
+    console.log(`⏭️ Job ${job.jobId} already in queue, skipping duplicate injection.`);
+    return;
+  }
+
+  console.log('📥 Job Injected to Advanced Queue:', job.jobId);
   
   const apiJob = {
     orderId: job.orderId || job.jobId,
     fileUrl: job.url,
-    fileName: job.url.split('/').pop() || 'document.pdf',
+    fileName: job.url ? job.url.split('/').pop().split('?')[0] : 'document.pdf',
     fileType: 'pdf',
     printingOptions: job.options || {
       pageSize: 'A4',
@@ -261,7 +271,7 @@ ipcMain.on('inject_job', async (event, job) => {
     apiJob.printingOptions.color = 'color';
   }
 
-  printQueue.addToQueue(apiJob, 0); // 0 is default printer index
+  printQueue.addToQueue(apiJob, 0);
   mainWindow.webContents.send('incoming_job', job);
 });
 
@@ -280,9 +290,19 @@ ipcMain.on('open-order-window', (event, order) => {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      plugins: true
     },
     backgroundColor: '#f9fafb'
+  });
+
+  // Prevent PDF URLs from triggering download dialogs — keep them in the iframe
+  win.webContents.session.on('will-download', (event, item) => {
+    const url = item.getURL();
+    // If the download was triggered by a PDF link in the preview, cancel it
+    if (url && (url.includes('.pdf') || url.includes('cloudinary') || url.includes('firebasestorage'))) {
+      event.preventDefault();
+    }
   });
   
   win.loadFile('order-window.html');
@@ -445,7 +465,7 @@ ipcMain.on('login', (event, { token: authToken, partnerId }) => {
     const apiJob = {
       orderId: job.orderId || job.jobId,
       fileUrl: job.url,
-      fileName: job.url.split('/').pop() || 'document.pdf',
+      fileName: job.originalFileName || (job.url ? job.url.split('/').pop().split('?')[0] : 'document.pdf'),
       fileType: 'pdf',
       printingOptions: job.options || {
         pageSize: 'A4',

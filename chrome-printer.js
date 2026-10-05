@@ -324,7 +324,8 @@ function findLibreOfficePath() {
 async function convertWordToPdf(wordFilePath) {
     try {
         console.log(`🔄 Converting Word file to PDF using LibreOffice: ${wordFilePath}`);
-        const tempDir = path.join(process.cwd(), 'temp');
+        const { app: elApp } = require("electron");
+        const tempDir = path.join(elApp ? elApp.getPath('temp') : process.cwd(), 'funprinting-print');
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
         }
@@ -1448,7 +1449,8 @@ async function printFile(filePath, options) {
                         console.log(`📋 Color pages: ${normalizedPageColors.colorPages.join(', ')}`);
                         console.log(`📋 B&W pages: ${normalizedPageColors.bwPages.join(', ')}`);
                         // Create temp directory
-                        const tempDir = path.join(process.cwd(), 'temp');
+                        const { app: elApp2 } = require("electron");
+                        const tempDir = path.join(elApp2 ? elApp2.getPath('temp') : process.cwd(), 'funprinting-print');
                         if (!fs.existsSync(tempDir)) {
                             fs.mkdirSync(tempDir, { recursive: true });
                         }
@@ -1584,7 +1586,8 @@ async function printFile(filePath, options) {
                         console.log(`✅ Valid pageColors structure detected for mixed color printing`);
                         console.log(`📋 Color pages: ${normalizedPageColors.colorPages.join(', ')}`);
                         console.log(`📋 B&W pages: ${normalizedPageColors.bwPages.join(', ')}`);
-                        const tempDir = path.join(process.cwd(), 'temp');
+                        const { app: elApp3 } = require("electron");
+                        const tempDir = path.join(elApp3 ? elApp3.getPath('temp') : process.cwd(), 'funprinting-print');
                         await printPdfWithMixedColorInSequence(pdfPath, normalizedPageColors.colorPages, normalizedPageColors.bwPages, printerName, copies, pageSize, sided, tempDir);
                     }
                 }
@@ -1824,7 +1827,8 @@ async function printJob(job, printerIndex) {
         emitStatus(job.id || job.orderId, "Downloading document...");
         console.log(`Starting print job: ${job.fileName} (Delivery: ${job.deliveryNumber})`);
         // Create temp directory
-        const tempDir = path.join(process.cwd(), 'temp');
+        const { app } = require("electron");
+        const tempDir = path.join(app ? app.getPath('temp') : process.cwd(), 'funprinting-print');
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
         }

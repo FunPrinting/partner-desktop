@@ -488,6 +488,9 @@
       window.electronAPI.openOrderWindow(order);
     };
 
+    // Track which orders have already been injected to the print queue this session
+    const injectedOrderIds = new Set();
+
     // Auto-update print queue and cache orders on fetch
     async function processFetchedOrdersForQueue(orders) {
       if (!db) await initDB();
@@ -495,9 +498,10 @@
         // Cache every order
         await cacheOrder(order);
         
-        // Auto-inject pending/printing ones into print queue if they are meant to be printed
-        // This is robust error recovery!
-        if (order.status === 'paid' || order.status === 'processing' || order.status === 'printing') {
+        // Only auto-inject if not already injected this session
+        if (!injectedOrderIds.has(order.orderId) && 
+            (order.status === 'paid' || order.status === 'processing' || order.status === 'printing')) {
+          injectedOrderIds.add(order.orderId);
           const job = {
             jobId: order.orderId,
             orderId: order.orderId,
