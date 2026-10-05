@@ -20,6 +20,8 @@ let token; // For storing auth token
 let oauthServer = null; // Store local oauth server
 
 let selectedPrintEngine = 'native'; // Default
+let customChromePath = '';
+let customLibrePath = '';
 
 // Queue Persistence Path
 let queuePath = '';
@@ -69,10 +71,11 @@ function removeJobFromQueue(jobId) {
 async function convertWordToPdf(inputPath) {
   return new Promise((resolve, reject) => {
     const outDir = path.dirname(inputPath);
-    // Uses LibreOffice headless. Make sure soffice is in PATH.
+    // Uses LibreOffice headless. Make sure soffice is in PATH or specify custom path.
+    const sofficeBin = customLibrePath || 'soffice';
     const cmd = process.platform === 'win32' 
-      ? `soffice --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`
-      : `soffice --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`;
+      ? `"${sofficeBin}" --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`
+      : `"${sofficeBin}" --headless --convert-to pdf "${inputPath}" --outdir "${outDir}"`;
       
     console.log(`🔄 Converting Word to PDF: ${cmd}`);
     exec(cmd, (error) => {
@@ -443,6 +446,12 @@ ipcMain.on('set_engine', (event, engine) => {
   console.log(`🖨️ Printing engine switched to: ${selectedPrintEngine}`);
 });
 
+ipcMain.on('set_paths', (event, paths) => {
+  if (paths.chromePath !== undefined) customChromePath = paths.chromePath;
+  if (paths.librePath !== undefined) customLibrePath = paths.librePath;
+  console.log(`🔧 Custom paths set: Chrome="${customChromePath}", Libre="${customLibrePath}"`);
+});
+
 // Phase 7: Real AIMD Printing Engine (Hardware Execution)
 async function startAIMDPrinting(job) {
   let packetSize = 5;
@@ -571,12 +580,13 @@ async function startAIMDPrinting(job) {
              try {
                let printCmd;
                const fileUrl = `file:///${finalPdfPath.replace(/\\/g, '/')}`;
+               const chromeBin = customChromePath || 'chrome';
                
                if (activePrinterName) {
                  // Set temporary default printer, print via Chrome, then restore
-                 printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath 'chrome' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden; Start-Sleep -Seconds 5; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
+                 printCmd = `powershell -Command "$old=(Get-CimInstance Win32_Printer | Where-Object Default -eq $true).Name; (Get-CimInstance Win32_Printer -Filter \\"Name='${activePrinterName}'\\").InvokeMethod('SetDefaultPrinter', $null); Start-Process -FilePath '${chromeBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden; Start-Sleep -Seconds 5; if ($old) { (Get-CimInstance Win32_Printer -Filter \\"Name='$old'\\").InvokeMethod('SetDefaultPrinter', $null) }"`;
                } else {
-                 printCmd = `powershell -Command "Start-Process -FilePath 'chrome' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden"`;
+                 printCmd = `powershell -Command "Start-Process -FilePath '${chromeBin}' -ArgumentList '--kiosk-printing', '${fileUrl}' -WindowStyle Hidden"`;
                }
                await execAsync(printCmd);
                console.log(`✅ Chrome automated printing executed successfully.`);

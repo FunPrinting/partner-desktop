@@ -14,5 +14,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setPrintEngine: (engine) => ipcRenderer.send('set_engine', engine),
   onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data)),
   getPrinters: () => ipcRenderer.invoke('get-printers'),
-  setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName)
+  setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName),
+  setPaths: (paths) => ipcRenderer.send('set_paths', paths)
 });

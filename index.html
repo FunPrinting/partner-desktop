@@ -230,6 +230,20 @@
             </label>
           </div>
 
+          <div class="border-t border-gray-700 pt-4 mt-4">
+            <label class="block text-sm font-bold text-indigo-400 mb-3">System Paths (Advanced)</label>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Google Chrome Executable Path</label>
+                <input type="text" id="set-chrome-path" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="Leave empty for auto-detect (chrome)">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">LibreOffice Executable Path</label>
+                <input type="text" id="set-libre-path" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 text-white" placeholder="Leave empty for auto-detect (soffice)">
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-4 border-t border-gray-700 pt-4 mt-4">
             <div class="col-span-2 flex justify-between items-center">
               <label class="block text-sm font-bold text-indigo-400">Shop Location (Coordinates)</label>
@@ -399,6 +413,13 @@
     });
 
     window.electronAPI.onOAuthSuccess(({ partnerId, token }) => {
+      // Send initial paths right after login if available
+      if (window.electronAPI.setPaths) {
+        const cp = localStorage.getItem('chromePath') || '';
+        const lp = localStorage.getItem('librePath') || '';
+        window.electronAPI.setPaths({ chromePath: cp, librePath: lp });
+      }
+
       document.getElementById('access-token').value = token;
       loginBtn.innerHTML = "Connecting Engine...";
       window.electronAPI.login({ partnerId, token });
@@ -670,6 +691,11 @@
             document.getElementById('set-is-online').checked = data.partner.isOnline;
           }
           
+          const savedChromePath = localStorage.getItem('chromePath') || '';
+          const savedLibrePath = localStorage.getItem('librePath') || '';
+          document.getElementById('set-chrome-path').value = savedChromePath;
+          document.getElementById('set-libre-path').value = savedLibrePath;
+          
           const dpContainer = document.getElementById('dp-container');
           dpContainer.innerHTML = '';
           if (data.partner.deliveryPoints) {
@@ -864,6 +890,14 @@
         isOnline: document.getElementById('set-is-online').checked,
         deliveryPoints: dps
       };
+
+      const chromePath = document.getElementById('set-chrome-path').value.trim();
+      const librePath = document.getElementById('set-libre-path').value.trim();
+      localStorage.setItem('chromePath', chromePath);
+      localStorage.setItem('librePath', librePath);
+      if (window.electronAPI.setPaths) {
+        window.electronAPI.setPaths({ chromePath, librePath });
+      }
 
       saveBtn.innerText = 'Saving...';
       saveBtn.disabled = true;
