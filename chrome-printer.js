@@ -1825,7 +1825,8 @@ function emitStatus(jobId, status) {
 async function printJob(job, printerIndex) {
     try {
         // Normalize properties for backwards compatibility
-        job.fileName = job.fileName || job.originalFileName || 'document.pdf';
+        const defaultExt = job.fileType ? (job.fileType.startsWith('.') ? job.fileType : `.${job.fileType}`) : '.pdf';
+        job.fileName = job.fileName || job.originalFileName || `document${defaultExt}`;
         job.fileUrl = job.fileUrl || job.documentUrl || job.url;
         
         if (!job.fileUrl) {
@@ -1841,7 +1842,15 @@ async function printJob(job, printerIndex) {
             fs.mkdirSync(tempDir, { recursive: true });
         }
         // Download file
-        const fileExtension = path.extname(job.fileName) || '.pdf';
+        let fileExtension = path.extname(job.fileName);
+        if (!fileExtension || fileExtension === '') {
+            if (job.fileType) {
+                fileExtension = job.fileType.startsWith('.') ? job.fileType : `.${job.fileType}`;
+            } else {
+                fileExtension = '.pdf';
+            }
+        }
+        
         const tempFilePath = path.join(tempDir, `${job.deliveryNumber}${fileExtension}`);
         const fileExtensionLower = fileExtension.toLowerCase();
         // Determine if this is a simple single-sheet job that should use Sumatra and skip order summary
