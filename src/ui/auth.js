@@ -63,6 +63,12 @@ function initAuth() {
     loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
     fetchFinancials();
+
+    // Also start populating the queue immediately after auth
+    if (typeof window.fetchAndInjectOrders === 'function') {
+      console.log('[Auto-Sync] Auth success — fetching orders for queue...');
+      window.fetchAndInjectOrders();
+    }
   });
 
   // ── Cloud Connection Status ────────────────────────────────────────
@@ -75,6 +81,12 @@ function initAuth() {
       loginBtn.disabled = true;
       loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
       fetchFinancials();
+
+      // AUTO-FETCH: Populate the home page queue with existing orders
+      if (typeof window.fetchAndInjectOrders === 'function') {
+        console.log('[Auto-Sync] WSS connected — fetching orders for queue...');
+        window.fetchAndInjectOrders();
+      }
     } else {
       if (isAuthenticated) {
         statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-800/50 text-sm font-medium transition-colors";

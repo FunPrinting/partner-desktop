@@ -196,6 +196,9 @@ function initOrders() {
           jobId: order.orderId,
           orderId: order.orderId,
           url: order.fileURL || (order.fileURLs ? order.fileURLs[0] : null),
+          fileURLs: order.fileURLs,
+          originalFileNames: order.originalFileNames,
+          fileTypes: order.fileTypes,
           options: order.printingOptions,
           customer: order.customerInfo,
           orderDetails: order
@@ -204,6 +207,26 @@ function initOrders() {
       }
     });
   }
+
+  // ── Global: Fetch orders from API and inject into queue ────────────
+  // Called by auth.js on WSS connect AND when modal opens
+
+  window.fetchAndInjectOrders = async function() {
+    const token = document.getElementById('access-token').value;
+    if (!token) return;
+
+    try {
+      const res = await fetch('https://www.funprinting.store/api/partner/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && data.orders && data.orders.length > 0) {
+        processFetchedOrdersForQueue(data.orders);
+      }
+    } catch (e) {
+      console.error('fetchAndInjectOrders failed:', e);
+    }
+  };
 
   // ── Global Helpers ─────────────────────────────────────────────────
 
@@ -215,7 +238,10 @@ function initOrders() {
 
   window.updateOrderStatus = async function(orderId, newStatus) {
     const token = document.getElementById('access-token').value;
-    if (!token) return;
+    if (!token) {
+      alert('Not authenticated. Please log in first.');
+      return;
+    }
     try {
       const res = await fetch(`https://www.funprinting.store/api/partner/orders/${orderId}`, {
         method: 'PATCH',
@@ -225,13 +251,20 @@ function initOrders() {
         },
         body: JSON.stringify({ status: newStatus })
       });
-      if (res.ok) {
-        loadOrders();
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Refresh the modal if it's open
+        if (!ordersModal.classList.contains('hidden')) {
+          loadOrders();
+        }
       } else {
-        alert('Failed to update status');
+        const errMsg = data.error || `Server returned ${res.status}`;
+        console.error('Status update failed:', errMsg);
+        alert(`Failed to update status: ${errMsg}`);
       }
     } catch (e) {
-      alert('Network error');
+      console.error('Status update network error:', e);
+      alert('Network error — check your internet connection.');
     }
   };
 }

@@ -235,19 +235,36 @@
       }
     });
 
-    function updateStatus(newStatus) {
+    async function updateStatus(newStatus) {
       if (currentOrder) {
-        window.electronAPI.updateOrderStatus(currentOrder.orderId, newStatus);
-        document.getElementById('status-order').innerText = newStatus.toUpperCase();
-        alert('Order status updated!');
+        try {
+          const result = await window.electronAPI.updateOrderStatus(currentOrder.orderId, newStatus);
+          if (result && result.success) {
+            document.getElementById('status-order').innerText = newStatus.toUpperCase();
+            alert('Order status updated!');
+          } else {
+            const errMsg = result?.error || 'Unknown error';
+            alert(`Failed to update status: ${errMsg}`);
+          }
+        } catch (e) {
+          alert(`Failed to update status: ${e.message}`);
+        }
       }
     }
     
-    function deleteOrder() {
+    async function deleteOrder() {
         if(confirm("Are you sure you want to delete this order?")) {
-             window.electronAPI.updateOrderStatus(currentOrder.orderId, 'cancelled');
-             alert("Order Cancelled!");
-             window.close();
+          try {
+            const result = await window.electronAPI.updateOrderStatus(currentOrder.orderId, 'cancelled');
+            if (result && result.success) {
+              alert("Order Cancelled!");
+              window.close();
+            } else {
+              alert(`Failed to cancel: ${result?.error || 'Unknown error'}`);
+            }
+          } catch (e) {
+            alert(`Failed to cancel: ${e.message}`);
+          }
         }
     }
   </script>
