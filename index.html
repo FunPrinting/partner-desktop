@@ -541,27 +541,47 @@
             const btn = document.getElementById('locate-me-btn');
             const originalHTML = btn.innerHTML;
             btn.innerHTML = 'Locating...';
-            
-            try {
-              // In Electron, navigator.geolocation often requires explicit permission handling.
-              // IP-based location is a reliable fallback for finding the general city.
-              const response = await fetch('https://ipwho.is/');
-              const data = await response.json();
-              
-              if (data && data.success && data.latitude && data.longitude) {
-                const lat = data.latitude;
-                const lng = data.longitude;
-                document.getElementById('set-lat').value = lat.toFixed(6);
-                document.getElementById('set-lng').value = lng.toFixed(6);
-                window.shopMarker.setLatLng([lat, lng]);
-                window.shopMap.setView([lat, lng], 15);
-              } else {
-                alert('Could not determine location automatically.');
+
+            const useIPFallback = async () => {
+              try {
+                const response = await fetch('https://ipwho.is/');
+                const data = await response.json();
+                if (data && data.success && data.latitude && data.longitude) {
+                  const lat = data.latitude;
+                  const lng = data.longitude;
+                  document.getElementById('set-lat').value = lat.toFixed(6);
+                  document.getElementById('set-lng').value = lng.toFixed(6);
+                  window.shopMarker.setLatLng([lat, lng]);
+                  window.shopMap.setView([lat, lng], 15);
+                } else {
+                  alert('Could not determine location automatically.');
+                }
+              } catch (err) {
+                alert('Network error while retrieving location.');
+              } finally {
+                btn.innerHTML = originalHTML;
               }
-            } catch (err) {
-              alert('Network error while retrieving location.');
-            } finally {
-              btn.innerHTML = originalHTML;
+            };
+
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  document.getElementById('set-lat').value = lat.toFixed(6);
+                  document.getElementById('set-lng').value = lng.toFixed(6);
+                  window.shopMarker.setLatLng([lat, lng]);
+                  window.shopMap.setView([lat, lng], 16); // closer zoom for exact GPS
+                  btn.innerHTML = originalHTML;
+                },
+                (err) => {
+                  console.warn("GPS failed, falling back to IP location", err);
+                  useIPFallback();
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+              );
+            } else {
+              useIPFallback();
             }
           });
         }

@@ -165,6 +165,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const { session } = require('electron');
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'geolocation') {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
   queuePath = path.join(app.getPath('userData'), 'print-queue.json');
   createWindow();
 
