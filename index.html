@@ -586,13 +586,21 @@
           });
         }
         
-        const currentLat = parseFloat(document.getElementById('set-lat').value) || 28.6139;
-        const currentLng = parseFloat(document.getElementById('set-lng').value) || 77.2090;
+        const currentLatStr = document.getElementById('set-lat').value;
+        const currentLngStr = document.getElementById('set-lng').value;
+        const currentLat = parseFloat(currentLatStr);
+        const currentLng = parseFloat(currentLngStr);
         
         setTimeout(() => {
           window.shopMap.invalidateSize();
-          window.shopMap.setView([currentLat, currentLng], 15);
-          window.shopMarker.setLatLng([currentLat, currentLng]);
+          if (!isNaN(currentLat) && !isNaN(currentLng)) {
+            // They have a saved location, show it
+            window.shopMap.setView([currentLat, currentLng], 15);
+            window.shopMarker.setLatLng([currentLat, currentLng]);
+          } else {
+            // No saved location, automatically try to locate them
+            document.getElementById('locate-me-btn').click();
+          }
         }, 100);
 
       } catch (err) {
