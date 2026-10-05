@@ -598,6 +598,16 @@
       }
     }
 
+    if (window.electronAPI.onJobCompleted) {
+      window.electronAPI.onJobCompleted((job) => {
+        const orderId = job.orderId || job.jobId;
+        if (orderId) {
+          console.log(`[Auto-Update] Setting order ${orderId} to ready_for_pickup after successful print`);
+          window.updateOrderStatus(orderId, 'ready_for_pickup');
+        }
+      });
+    }
+
     // Handle Updates
     checkUpdateBtn.addEventListener('click', () => {
       window.electronAPI.checkUpdates();

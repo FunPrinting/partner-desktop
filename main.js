@@ -84,6 +84,17 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  try {
+    const printQueue = require('./chrome-queue');
+    printQueue.setOnJobCompleteCallback((job) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('job-completed', job);
+      }
+    });
+  } catch(e) {
+    console.error("Failed to set up job complete callback", e);
+  }
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

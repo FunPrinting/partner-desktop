@@ -329,6 +329,13 @@ async function processQueue() {
                 console.log(`📄 File: ${queuedJob.job.fileName}`);
                 console.log(`📋 Remaining jobs in queue: ${printQueue.length}`);
                 console.log(`${'─'.repeat(60)}\n`);
+                if (onJobCompleteCallback) {
+                    try {
+                        onJobCompleteCallback(queuedJob.job);
+                    } catch (err) {
+                        console.error('Error in onJobCompleteCallback:', err);
+                    }
+                }
             }
             else {
                 // Job failed - check retry limit
@@ -427,6 +434,10 @@ function getQueueStatus() {
         jobs: [...printQueue]
     };
 }
+let onJobCompleteCallback = null;
+function setOnJobCompleteCallback(callback) {
+    onJobCompleteCallback = callback;
+}
 /**
  * Clear queue (use with caution)
  */
@@ -435,6 +446,7 @@ function clearQueue() {
     saveQueue();
     console.log('Queue cleared');
 }
+exports.setOnJobCompleteCallback = setOnJobCompleteCallback;
 // Load queue on startup
 loadQueue();
 // Start processing if queue has pending jobs
