@@ -51,7 +51,7 @@ function initOrders() {
           <tr>
             <td><button class="btn btn-plain mono" data-open="${esc(o.orderId)}" title="Open order">${esc(o.orderId)}</button></td>
             <td class="muted">${esc(new Date(o.createdAt).toLocaleDateString())}</td>
-            <td class="truncate" title="${esc(name)}">${esc(name)}${files > 1 ? ` <span class="muted">+${files - 1}</span>` : ''}</td>
+            <td class="truncate" title="${esc(name)}">${esc(name)}${files > 1 ? ` <span class="muted">+${files - 1}</span>` : ''}${printedOn(o) ? `<div class="muted small truncate">Printed on ${esc(printedOn(o))}</div>` : ''}</td>
             <td class="truncate">${esc(o.customerInfo?.name || '')}</td>
             <td class="muted">${esc(fulfilmentLabel(o))}</td>
             <td class="num">${esc(money(partnerShare(o), 2))}</td>

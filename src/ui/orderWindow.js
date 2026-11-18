@@ -61,6 +61,7 @@
       ['Pages', o.pageCount],
       ['Order total', typeof order.amount === 'number' ? money(order.amount, 2) : ''],
       ['Your share', typeof order.amount === 'number' ? money(partnerShare(order), 2) : ''],
+      ['Printed on', printedOn(order)],
     ]);
     const d = order.deliveryOption || {};
     const how = fulfilmentOf(order);

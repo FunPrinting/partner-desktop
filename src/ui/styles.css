@@ -91,6 +91,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--primary); }
 .hidden { display: none !important; }
 .muted { color: var(--text-3); }
+.small { font-size: 12px; }
 .mono { font-family: var(--font-mono); font-size: 12.5px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 

@@ -123,7 +123,8 @@ function jobPath(jobId) {
 function report(jobId, status, error) {
   return session.apiFetch(jobPath(jobId), {
     method: 'POST',
-    body: { action: 'report', status, ...(error ? { error: String(error).slice(0, 500) } : {}) },
+    // The printer name lets the shop see where each order was printed
+    body: { action: 'report', status, ...(error ? { error: String(error).slice(0, 500) } : {}), ...(printerName ? { printer: String(printerName).slice(0, 200) } : {}) },
   });
 }
 

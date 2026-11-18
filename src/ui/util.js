@@ -214,3 +214,10 @@ async function bookCourierFor(order) {
   toast(`Courier booked: ${result.data.courierName}, AWB ${result.data.awbCode}.`);
   return result.data.order || order;
 }
+
+/** "Front desk PC · HP LaserJet", or '' if not printed yet. */
+function printedOn(order) {
+  const p = order?.job?.printedBy;
+  if (p) return [p.deviceName, p.printer].filter(Boolean).join(' · ') || 'A shop device';
+  return '';
+}
