@@ -9,38 +9,24 @@ const { findLibreOfficePath } = require("./browserFinder");
 /**
  * Download file from URL with redirect support
  */
-async function downloadFile(fileUrl, outputPath) {
-  const https = require("https");
-  const http = require("http");
+async function downloadFile(fileUrl, outputPath, { timeoutMs = 120000 } = {}) {
+  const { Readable } = require("stream");
+  const { pipeline } = require("stream/promises");
 
-  return new Promise((resolve, reject) => {
-    const protocol = fileUrl.startsWith("https") ? https : http;
-    const file = fs.createWriteStream(outputPath);
-
-    protocol
-      .get(fileUrl, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          return downloadFile(response.headers.location, outputPath)
-            .then(resolve)
-            .catch(reject);
-        }
-        if (response.statusCode !== 200) {
-          reject(
-            new Error(`Failed to download file: ${response.statusCode}`)
-          );
-          return;
-        }
-        response.pipe(file);
-        file.on("finish", () => {
-          file.close();
-          resolve();
-        });
-      })
-      .on("error", (err) => {
-        fs.unlink(outputPath, () => {});
-        reject(err);
-      });
-  });
+  if (!/^https?:\/\//i.test(String(fileUrl))) {
+    throw new Error("Failed to download file: unsupported URL");
+  }
+  // fetch follows every redirect type, unlike the old http.get version
+  const res = await fetch(fileUrl, { redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok || !res.body) {
+    throw new Error(`Failed to download file: ${res.status}`);
+  }
+  try {
+    await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(outputPath));
+  } catch (err) {
+    fs.rmSync(outputPath, { force: true });
+    throw new Error(`Failed to download file: ${err.message}`);
+  }
 }
 
 /**

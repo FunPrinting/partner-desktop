@@ -2,7 +2,7 @@
  * Order detail window — separate BrowserWindow with PDF header interception
  */
 
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, nativeTheme } = require('electron');
 const path = require('path');
 
 const orderWindows = {};
@@ -14,16 +14,20 @@ function openOrderWindow(order) {
   }
 
   const win = new BrowserWindow({
-    width: 1000,
-    height: 800,
+    width: 1100,
+    height: 820,
+    minWidth: 820,
+    minHeight: 600,
+    autoHideMenuBar: true,
     title: `Order #${order.orderId}`,
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       plugins: true
     },
-    backgroundColor: '#f9fafb'
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111113' : '#f4f4f5'
   });
 
   // Force PDFs to display inline in preview iframe, allow downloads in new tabs
@@ -57,7 +61,8 @@ function openOrderWindow(order) {
     callback({ responseHeaders: headers });
   });
 
-  win.loadFile(path.join(__dirname, '..', '..', 'order-window.html'));
+  const platform = process.platform === 'darwin' ? 'platform-mac' : process.platform === 'win32' ? 'platform-win' : 'platform-linux';
+  win.loadFile(path.join(__dirname, '..', '..', 'order-window.html'), { query: { platform } });
 
   win.webContents.on('did-finish-load', () => {
     win.webContents.send('order-data', order);

@@ -1,132 +1,184 @@
 /**
- * All IPC handlers — registers ipcMain.on/handle listeners
+ * IPC between the windows and the main process.
+ *
+ * Tokens stay in the main process: the windows call the web API through
+ * 'api:request', which only allows the partner API paths.
  */
 
 const { ipcMain } = require('electron');
-const { processIncomingJob } = require('./jobProcessor');
+const session = require('./session');
+const jobSync = require('./jobSync');
+const queue = require('../queue/queueManager');
 const { openOrderWindow } = require('./orderWindow');
 const { checkForUpdates } = require('./updater');
-const { startOAuth, login, getToken, getActiveJobs } = require('./auth');
+const { reportError } = require('./errorReporter');
+const prefs = require('./prefs');
 
-let activePrinterName = null;
+const API_PATH = /^\/api\/partner\/[A-Za-z0-9/_.?=&%-]*$/;
+const API_METHODS = new Set(['GET', 'POST', 'PATCH']);
 
-function registerIpcHandlers(getMainWindow) {
-  // ── Queue ──────────────────────────────────────────────────────────
+/** Only our own pages (loaded from disk) may use the IPC API. */
+function fromApp(event) {
+  const url = event.senderFrame?.url || '';
+  return url.startsWith('file://');
+}
 
-  ipcMain.handle('get-queue', async () => {
-    try {
-      const printQueue = require('../../chrome-queue');
-      const status = printQueue.getQueueStatus();
-      return status.jobs.map(qj => ({
-        jobId: qj.job?.orderId || qj.id,
-        orderId: qj.job?.orderId || qj.id,
-        url: qj.job?.fileUrl,
-        options: qj.job?.printingOptions,
-        status: qj.status
-      }));
-    } catch (e) {
-      console.error("Failed to read queue for UI", e);
-    }
-    return [];
+function handle(channel, fn) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (!fromApp(event)) throw new Error('Not allowed');
+    return fn(...args);
   });
+}
 
-  ipcMain.on('clear-data', () => {
-    try {
-      const printQueue = require('../../chrome-queue');
-      printQueue.clearQueue();
-      const { getSocket } = require('./auth');
-      const socket = getSocket();
-      if (socket) socket.disconnect();
-      console.log("App data and queue cleared successfully");
-    } catch (e) {
-      console.error("Failed to clear app data", e);
-    }
+function on(channel, fn) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!fromApp(event)) return;
+    fn(...args);
   });
+}
 
-  // ── Job Injection ──────────────────────────────────────────────────
+function registerIpcHandlers(getMainWindow, { onSignedIn }) {
+  // ── Session ──────────────────────────────────────────────────────────
 
-  ipcMain.on('inject_job', async (event, job) => {
-    processIncomingJob(job, 'Local UI', getMainWindow);
-  });
+  handle('session:get', () => session.publicState());
 
-  ipcMain.on('cancel_job', async (event, jobId) => {
-    console.log(`🛑 Cancelling job from Local UI: ${jobId}`);
+  handle('session:sign-in', async () => {
     try {
-      const printQueue = require('../../chrome-queue');
-      printQueue.removeJob(jobId);
+      const state = await session.signIn();
+      onSignedIn();
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+      return { ok: true, state };
     } catch (err) {
-      console.error('Failed to remove job from queue:', err);
+      return { ok: false, error: err.message };
     }
   });
 
-  // ── Order Window ───────────────────────────────────────────────────
-
-  ipcMain.on('open-order-window', (event, order) => {
-    openOrderWindow(order);
+  handle('session:sign-out', async () => {
+    await jobSync.releaseCurrent();
+    await session.signOut();
+    return { ok: true };
   });
 
-  // ── Updates ────────────────────────────────────────────────────────
+  // ── Web API proxy ────────────────────────────────────────────────────
 
-  ipcMain.on('check-updates', () => {
-    checkForUpdates(getMainWindow);
-  });
-
-  // ── Printers ───────────────────────────────────────────────────────
-
-  ipcMain.handle('get-printers', async () => {
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-      return await mainWindow.webContents.getPrintersAsync();
+  handle('api:request', async (req) => {
+    const method = String(req?.method || 'GET').toUpperCase();
+    const path = String(req?.path || '');
+    if (!API_METHODS.has(method) || !API_PATH.test(path) || path.includes('..')) {
+      return { ok: false, status: 400, data: { error: 'Request not allowed' } };
     }
-    return [];
-  });
-
-  ipcMain.on('set_active_printer', (event, printerName) => {
-    activePrinterName = printerName;
-    process.env.PRINTER_NAME = printerName;
-    console.log(`🖨️ Active printer set to: ${activePrinterName}`);
-  });
-
-  // ── OAuth + Login ──────────────────────────────────────────────────
-
-  ipcMain.on('start-oauth', () => {
-    startOAuth(getMainWindow);
-  });
-
-  ipcMain.on('login', (event, { token: authToken, partnerId }) => {
-    login(authToken, partnerId, getMainWindow);
-  });
-
-  // ── Order Status ───────────────────────────────────────────────────
-
-  ipcMain.handle('update_order_status', async (event, { jobId, status }) => {
     try {
-      console.log(`Phase 4: Updating order ${jobId} to ${status}`);
-      const res = await fetch(`https://www.funprinting.store/api/partner/orders/${jobId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({ status })
-      });
-      const data = await res.json();
-      return data;
-    } catch (error) {
-      console.error('Failed to update status:', error);
-      return { success: false };
+      return await session.apiFetch(path, { method, body: req.body });
+    } catch (err) {
+      if (err instanceof session.NotSignedInError) return { ok: false, status: 401, data: { error: 'Not signed in' } };
+      return { ok: false, status: 0, data: { error: 'Network error. Check your internet connection.' } };
     }
   });
 
-  // ── Resume Print ───────────────────────────────────────────────────
+  // ── Jobs ─────────────────────────────────────────────────────────────
 
-  ipcMain.on('resume_print', (event, { jobId }) => {
-    console.log(`Phase 7: Manual Resume triggered for Job ${jobId}`);
-    const activeJobs = getActiveJobs();
-    const jobState = activeJobs.get(jobId);
-    if (jobState && jobState.resumeFn) {
-      jobState.resumeFn();
+  handle('jobs:get', () => jobSync.snapshot());
+  handle('jobs:sync', () => jobSync.sync('manual').then(() => jobSync.snapshot()));
+  handle('jobs:action', async ({ jobId, action, reason } = {}) => {
+    if (typeof jobId !== 'string' || !jobId) return { ok: false, error: 'Missing job' };
+    try {
+      return await jobSync.jobAction(jobId, action, reason);
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
+  });
+  handle('jobs:set-paused', (paused) => {
+    jobSync.setPaused(Boolean(paused));
+    return jobSync.snapshot();
+  });
+
+  // ── Local queue ──────────────────────────────────────────────────────
+
+  handle('queue:get', () =>
+    queue.getQueueStatus().jobs.map((e) => ({
+      id: e.id,
+      jobId: e.job?.jobId,
+      orderId: e.job?.orderId,
+      fileName: e.job?.fileName,
+      status: e.status,
+      attempts: e.attempts,
+      error: e.error,
+    }))
+  );
+
+  // Print an order's files again on this computer (no job status change)
+  handle('queue:print-again', (order) => {
+    const urls = Array.isArray(order?.fileURLs) && order.fileURLs.length ? order.fileURLs : order?.fileURL ? [order.fileURL] : [];
+    const safe = urls.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+    if (!safe.length) return { ok: false, error: 'This order has no files' };
+    const opts = order.printingOptions || {};
+    safe.forEach((url, i) => {
+      const fo = opts.fileOptions?.[i] || {};
+      queue.addToQueue(
+        {
+          localOnly: true,
+          orderId: String(order.orderId || ''),
+          fileUrl: url,
+          fileName: String(order.originalFileNames?.[i] || order.originalFileName || `File ${i + 1}`).slice(0, 200),
+          fileType: String(order.fileTypes?.[i] || order.fileType || 'pdf').split('/').pop(),
+          printingOptions: {
+            pageSize: fo.pageSize || opts.pageSize || 'A4',
+            color: fo.color || opts.color || 'bw',
+            sided: fo.sided || opts.sided || 'single',
+            copies: fo.copies || opts.copies || 1,
+          },
+        },
+        0
+      );
+    });
+    return { ok: true, files: safe.length };
+  });
+
+  // ── Printers ─────────────────────────────────────────────────────────
+
+  handle('printers:list', async () => {
+    const win = getMainWindow();
+    return win ? win.webContents.getPrintersAsync() : [];
+  });
+
+  on('printers:set-active', (printerName) => {
+    prefs.set({ printerName: typeof printerName === 'string' && printerName ? printerName : null });
+    console.log(`🖨️ Active printer: ${printerName}`);
+  });
+
+  // ── Preferences ──────────────────────────────────────────────────────
+
+  handle('prefs:get', () => prefs.get());
+  handle('prefs:set', (patch) => prefs.set(patch && typeof patch === 'object' ? patch : {}));
+
+  // ── Windows, updates, errors ────────────────────────────────────────
+
+  on('open-order-window', (order) => {
+    if (order && typeof order.orderId === 'string') openOrderWindow(order);
+  });
+
+  on('check-updates', () => checkForUpdates(getMainWindow));
+  handle('app:version', () => require('electron').app.getVersion());
+  on('open-dashboard', () => require('electron').shell.openExternal(`${require('./config').WEB_URL}/partner/dashboard`));
+
+  on('report-error', (report) => {
+    if (!report || typeof report.message !== 'string') return;
+    const err = new Error(report.message.slice(0, 5000));
+    err.name = typeof report.name === 'string' ? report.name.slice(0, 200) : 'RendererError';
+    if (typeof report.stack === 'string') err.stack = report.stack.slice(0, 20000);
+    reportError(err, { context: { kind: 'renderer', url: String(report.url || '').slice(0, 300) } });
+  });
+
+  handle('clear-data', async () => {
+    await jobSync.releaseCurrent();
+    await session.signOut();
+    queue.clearQueue();
+    return { ok: true };
   });
 }
 

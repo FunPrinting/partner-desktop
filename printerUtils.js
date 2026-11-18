@@ -228,7 +228,7 @@ async function generateOrderSummaryPage(orderDetails, customerInfo, orderId, ord
         try {
             // Build verification URL
             const baseUrl = process.env.FUNPRINTING_URL || 'https://www.funprinting.store';
-            const verifyUrl = `${baseUrl}/verify-order/${orderId}`;
+            const verifyUrl = `${baseUrl}/orders/${encodeURIComponent(orderId)}`;
             // Generate QR code as PNG buffer
             const qrPngBuffer = await qrcode_1.default.toBuffer(verifyUrl, {
                 width: qrSize * 2, // Higher resolution for crisp printing

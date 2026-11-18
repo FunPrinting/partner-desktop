@@ -1,42 +1,48 @@
 /**
- * Auto-updater event wiring
+ * Auto-updates. A downloaded update is installed only when nothing is printing,
+ * so a restart never cuts a job in half.
  */
-
 const { autoUpdater } = require('electron-updater');
 
-// Configure
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
-function initAutoUpdater(getMainWindow) {
-  autoUpdater.on('update-available', () => {
-    getMainWindow().webContents.send('update-message', 'Update available. Downloading...');
-  });
+let isBusy = () => false;
+let installTimer = null;
 
-  autoUpdater.on('update-not-available', () => {
-    getMainWindow().webContents.send('update-message', 'App is up to date.');
-  });
+function send(getMainWindow, message) {
+  const win = getMainWindow();
+  if (win && !win.isDestroyed()) win.webContents.send('update-message', message);
+}
 
+function initAutoUpdater(getMainWindow, { busy } = {}) {
+  if (busy) isBusy = busy;
+  autoUpdater.on('update-available', () => send(getMainWindow, 'Update available. Downloading…'));
+  autoUpdater.on('update-not-available', () => send(getMainWindow, 'App is up to date.'));
   autoUpdater.on('error', (err) => {
     console.error('Update error:', err.message);
-    getMainWindow().webContents.send('update-message', 'Update check failed. You may be on the latest version.');
+    send(getMainWindow, 'Update check failed. Try again later.');
   });
-
-  autoUpdater.on('download-progress', (progressObj) => {
-    getMainWindow().webContents.send('update-message', `Downloading... ${Math.round(progressObj.percent)}%`);
-  });
-
+  autoUpdater.on('download-progress', (p) => send(getMainWindow, `Downloading… ${Math.round(p.percent)}%`));
   autoUpdater.on('update-downloaded', () => {
-    getMainWindow().webContents.send('update-message', 'Update downloaded. Restarting...');
-    setTimeout(() => {
-      autoUpdater.quitAndInstall();
-    }, 2000);
+    const tryInstall = () => {
+      if (isBusy()) {
+        send(getMainWindow, 'Update ready. It installs when printing finishes.');
+        return;
+      }
+      clearInterval(installTimer);
+      send(getMainWindow, 'Installing update and restarting…');
+      setTimeout(() => autoUpdater.quitAndInstall(), 2000);
+    };
+    clearInterval(installTimer);
+    installTimer = setInterval(tryInstall, 60_000);
+    tryInstall();
   });
 }
 
 function checkForUpdates(getMainWindow) {
-  getMainWindow().webContents.send('update-message', 'Checking for updates...');
-  autoUpdater.checkForUpdatesAndNotify();
+  send(getMainWindow, 'Checking for updates…');
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => console.error('Update check failed:', err.message));
 }
 
 module.exports = { initAutoUpdater, checkForUpdates };

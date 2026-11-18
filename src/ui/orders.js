@@ -1,270 +1,137 @@
 /**
- * Orders modal — fetch, render, cache sync, status updates
+ * Orders page: every order for the shop, with search and Open / Done / All.
+ * Printing is driven by print jobs (jobs.js); here orders are looked up, opened
+ * in their own window and moved on after printing. The last list is cached
+ * (IndexedDB) so it still shows when offline.
  */
 
-// Track which orders have already been injected to the print queue this session
-const injectedOrderIds = new Set();
+const DONE_STATUSES = new Set(['completed', 'delivered', 'cancelled', 'refunded']);
+
+function statusTone(status) {
+  if (status === 'completed' || status === 'delivered') return 'success';
+  if (status === 'ready_for_pickup' || status === 'printed') return 'warning';
+  if (status === 'printing' || status === 'processing') return 'info';
+  if (status === 'cancelled' || status === 'refunded') return 'danger';
+  return 'neutral';
+}
 
 function initOrders() {
-  const ordersModal = document.getElementById('orders-modal');
-  const openOrdersBtn = document.getElementById('open-orders-btn');
-  const closeOrdersBtn = document.getElementById('close-orders-btn');
-  const ordersTbody = document.getElementById('orders-tbody');
-  const ordersLoading = document.getElementById('orders-loading');
-  const ordersEmpty = document.getElementById('orders-empty');
+  const tbody = document.getElementById('orders-tbody');
+  const empty = document.getElementById('orders-empty');
+  const bannerBox = document.getElementById('orders-banner');
+  const search = document.getElementById('orders-search');
+  const filterBox = document.getElementById('orders-filter');
+  const refreshBtn = document.getElementById('refresh-orders-btn');
+  let orders = [];
+  let filter = 'open';
+  let loading = false;
 
-  openOrdersBtn.addEventListener('click', async () => {
-    ordersModal.classList.remove('hidden');
-    await loadOrders();
-  });
-
-  closeOrdersBtn.addEventListener('click', () => {
-    ordersModal.classList.add('hidden');
-  });
-
-  // Auto-update order status on print completion
-  if (window.electronAPI.onJobCompleted) {
-    window.electronAPI.onJobCompleted((job) => {
-      const orderId = job.orderId || job.jobId;
-      if (orderId) {
-        console.log(`[Auto-Update] Setting order ${orderId} to ready_for_pickup after successful print`);
-        window.updateOrderStatus(orderId, 'ready_for_pickup');
-      }
+  function visible() {
+    const q = search.value.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (filter === 'open' && (DONE_STATUSES.has(o.status) || o.status === 'pending_payment')) return false;
+      if (filter === 'done' && !DONE_STATUSES.has(o.status)) return false;
+      if (!q) return true;
+      const hay = [o.orderId, o.originalFileName, ...(o.originalFileNames || []), o.customerInfo?.name, o.customerInfo?.phone].join(' ').toLowerCase();
+      return hay.includes(q);
     });
   }
 
-  // Handle job cancellation — remove from local cache
-  if (window.electronAPI.onJobCancelled) {
-    window.electronAPI.onJobCancelled((jobId) => {
-      console.log(`[Cancel] Removing cancelled order ${jobId} from local cache`);
-      const db = getDB();
-      if (db) {
-        const transaction = db.transaction([getStoreName()], 'readwrite');
-        const store = transaction.objectStore(getStoreName());
-        store.delete(jobId);
-      }
-      if (!ordersModal.classList.contains('hidden')) {
-        loadOrders();
-      }
-    });
+  function render() {
+    const rows = visible();
+    tbody.innerHTML = rows
+      .map((o) => {
+        const next = nextStatuses(o);
+        const name = o.originalFileName || o.originalFileNames?.[0] || 'Document';
+        const files = o.originalFileNames?.length || 1;
+        const action = canBookCourier(o)
+          ? `<button class="btn btn-sm" data-book="${esc(o.orderId)}">${icon('truck', 'icon-sm')}Book courier</button>`
+          : next.map((s) => `<button class="btn btn-sm" data-move="${esc(o.orderId)}" data-status="${esc(s)}">${esc(ORDER_STATUS_LABEL[s] || s)}</button>`).join(' ');
+        return `
+          <tr>
+            <td><button class="btn btn-plain mono" data-open="${esc(o.orderId)}" title="Open order">${esc(o.orderId)}</button></td>
+            <td class="muted">${esc(new Date(o.createdAt).toLocaleDateString())}</td>
+            <td class="truncate" title="${esc(name)}">${esc(name)}${files > 1 ? ` <span class="muted">+${files - 1}</span>` : ''}${printedOn(o) ? `<div class="muted small truncate">Printed on ${esc(printedOn(o))}</div>` : ''}</td>
+            <td class="truncate">${esc(o.customerInfo?.name || '')}</td>
+            <td class="muted">${esc(fulfilmentLabel(o))}</td>
+            <td class="num">${esc(money(partnerShare(o), 2))}</td>
+            <td>${pill(ORDER_STATUS_LABEL[o.status] || o.status, statusTone(o.status))}</td>
+            <td style="width:170px">${action}</td>
+          </tr>`;
+      })
+      .join('');
+    const none = !rows.length && !loading;
+    empty.classList.toggle('hidden', !none);
+    if (none) {
+      empty.innerHTML = search.value.trim()
+        ? emptyState('search', 'No matching orders', 'Try another order number, file name or customer.')
+        : emptyState('inbox', filter === 'open' ? 'No open orders' : 'No orders here', 'Paid orders for your shop appear here.');
+    }
   }
 
-  // ── Load & Render ──────────────────────────────────────────────────
-
-  async function loadOrders() {
-    const token = document.getElementById('access-token').value;
-    if (!token) return;
-
-    ordersTbody.innerHTML = '';
-
-    // Show cached data instantly
+  async function load() {
+    loading = true;
+    // Saved copy first, so the page fills instantly (and offline)
     try {
-      const cachedOrders = await getAllCachedOrders();
-      if (cachedOrders && cachedOrders.length > 0) {
-        cachedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        renderOrdersToTable(cachedOrders);
-      } else {
-        ordersLoading.classList.remove('hidden');
+      const cached = await getAllCachedOrders();
+      if (cached && cached.length && !orders.length) {
+        orders = cached.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        render();
       }
-    } catch (e) {
-      ordersLoading.classList.remove('hidden');
+    } catch {
+      // no cache yet
     }
-
-    ordersEmpty.classList.add('hidden');
-
-    try {
-      const res = await fetch('https://www.funprinting.store/api/partner/orders', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      ordersLoading.classList.add('hidden');
-
-      if (data.success && data.orders.length > 0) {
-        processFetchedOrdersForQueue(data.orders);
-        renderOrdersToTable(data.orders);
-        ordersEmpty.classList.add('hidden');
-      } else {
-        // Server returned 0 orders — clear all cached orders
-        const cachedOrders = await getAllCachedOrders();
-        const db = getDB();
-        if (cachedOrders && db) {
-          const transaction = db.transaction([getStoreName()], 'readwrite');
-          const store = transaction.objectStore(getStoreName());
-          cachedOrders.forEach(o => {
-            store.delete(o.orderId);
-            injectedOrderIds.delete(o.orderId);
-            if (window.electronAPI.cancelJob) {
-              window.electronAPI.cancelJob(o.orderId);
-            }
-          });
-        }
-        ordersTbody.innerHTML = '';
-        ordersEmpty.classList.remove('hidden');
-      }
-    } catch (e) {
-      console.error("Network fetch failed, attempting to load from cache:", e);
-      try {
-        const cachedOrders = await getAllCachedOrders();
-        if (cachedOrders && cachedOrders.length > 0) {
-          ordersLoading.classList.add('hidden');
-          ordersEmpty.classList.add('hidden');
-          cachedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          renderOrdersToTable(cachedOrders);
-        } else {
-          ordersLoading.classList.add('hidden');
-          ordersEmpty.classList.remove('hidden');
-          ordersEmpty.innerText = 'Offline and no cached orders found.';
-        }
-      } catch (cacheErr) {
-        ordersLoading.classList.add('hidden');
-        ordersEmpty.classList.remove('hidden');
-        ordersEmpty.innerText = 'Failed to load orders (Offline).';
-      }
-    }
-  }
-
-  function renderOrdersToTable(orders) {
-    ordersTbody.innerHTML = '';
-    orders.forEach(order => {
-      const tr = document.createElement('tr');
-      tr.className = "hover:bg-white/50 transition-colors";
-
-      let statusBadgeHtml = '';
-      if (order.status === 'completed') statusBadgeHtml = '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">Completed</span>';
-      else if (order.status === 'ready_for_pickup') statusBadgeHtml = '<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 rounded-full text-xs">Ready</span>';
-      else if (order.status === 'printing') statusBadgeHtml = '<span class="px-2 py-1 bg-blue-900/50 text-blue-400 rounded-full text-xs">Printing</span>';
-      else statusBadgeHtml = '<span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">' + order.status + '</span>';
-
-      let actionHtml = '';
-      if (order.status !== 'completed') {
-        actionHtml = `
-          <select class="bg-white border border-gray-600 rounded px-2 py-1 text-xs focus:ring-indigo-500 focus:border-blue-500 text-gray-900" onchange="updateOrderStatus('${order.orderId}', this.value)">
-            <option value="${order.status}" selected disabled>${order.status}</option>
-            <option value="pending">Pending</option>
-            <option value="printing">Printing</option>
-            <option value="ready_for_pickup">Ready for Pickup</option>
-            <option value="completed">Completed</option>
-          </select>
-        `;
-      }
-
-      const encodedOrder = encodeURIComponent(JSON.stringify(order));
-      tr.innerHTML = `
-        <td class="px-4 py-3 font-mono text-gray-600 cursor-pointer" onclick="openOrderDetails('${encodedOrder}')">${order.orderId.substring(0,8)}</td>
-        <td class="px-4 py-3 font-mono text-gray-600">${order.orderId.substring(0,8)}</td>
-        <td class="px-4 py-3 text-gray-500">${new Date(order.createdAt).toLocaleDateString()}</td>
-        <td class="px-4 py-3 text-gray-600 max-w-[150px] truncate" title="${order.originalFileName || 'Doc'}">${order.originalFileName || 'Doc'}</td>
-        <td class="px-4 py-3 font-bold text-green-700">₹${(order.amount * 0.9).toFixed(2)}</td>
-        <td class="px-4 py-3">${statusBadgeHtml}</td>
-        <td class="px-4 py-3">${actionHtml}</td>
-      `;
-      ordersTbody.appendChild(tr);
-    });
-  }
-
-  // ── Queue Injection ────────────────────────────────────────────────
-
-  async function processFetchedOrdersForQueue(orders) {
-    const db = getDB();
-    if (!db) await initDB();
-
-    const validOrderIds = new Set(orders.map(o => o.orderId));
-
-    // Cleanup stale orders
-    const cachedOrders = await getAllCachedOrders();
-    if (cachedOrders && db) {
-      const transaction = db.transaction([getStoreName()], 'readwrite');
-      const store = transaction.objectStore(getStoreName());
-      cachedOrders.forEach(o => {
-        if (!validOrderIds.has(o.orderId)) {
-          store.delete(o.orderId);
-          injectedOrderIds.delete(o.orderId);
-          if (window.electronAPI.cancelJob) {
-            window.electronAPI.cancelJob(o.orderId);
-          }
-        }
-      });
-    }
-
-    orders.forEach(async (order) => {
-      await cacheOrder(order);
-      if (!injectedOrderIds.has(order.orderId) &&
-          (order.status === 'paid' || order.status === 'processing' || order.status === 'printing')) {
-        injectedOrderIds.add(order.orderId);
-        const job = {
-          jobId: order.orderId,
-          orderId: order.orderId,
-          url: order.fileURL || (order.fileURLs ? order.fileURLs[0] : null),
-          fileURLs: order.fileURLs,
-          originalFileNames: order.originalFileNames,
-          fileTypes: order.fileTypes,
-          options: order.printingOptions,
-          customer: order.customerInfo,
-          orderDetails: order
-        };
-        window.electronAPI.injectJob(job);
-      }
-    });
-  }
-
-  // ── Global: Fetch orders from API and inject into queue ────────────
-  // Called by auth.js on WSS connect AND when modal opens
-
-  window.fetchAndInjectOrders = async function() {
-    const token = document.getElementById('access-token').value;
-    if (!token) return;
-
-    try {
-      const res = await fetch('https://www.funprinting.store/api/partner/orders', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success && data.orders && data.orders.length > 0) {
-        processFetchedOrdersForQueue(data.orders);
-      }
-    } catch (e) {
-      console.error('fetchAndInjectOrders failed:', e);
-    }
-  };
-
-  // ── Global Helpers ─────────────────────────────────────────────────
-
-  window.openOrderDetails = async function(encodedOrder) {
-    const order = JSON.parse(decodeURIComponent(encodedOrder));
-    await cacheOrder(order);
-    window.electronAPI.openOrderWindow(order);
-  };
-
-  window.updateOrderStatus = async function(orderId, newStatus) {
-    const token = document.getElementById('access-token').value;
-    if (!token) {
-      alert('Not authenticated. Please log in first.');
+    setBusy(refreshBtn, true, 'Refreshing');
+    const { ok, status, data } = await window.electronAPI.api('GET', '/api/partner/orders');
+    setBusy(refreshBtn, false);
+    loading = false;
+    if (!ok) {
+      bannerBox.innerHTML = banner('warning', status === 401 ? 'Please sign in again' : 'Showing saved orders', status === 401 ? '' : 'Can\'t reach FunPrinting right now.');
+      render();
       return;
     }
-    try {
-      const res = await fetch(`https://www.funprinting.store/api/partner/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
+    bannerBox.innerHTML = '';
+    orders = data.orders || [];
+    // Keep the local cache to what the server has
+    const db = getDB();
+    if (db) {
+      const keep = new Set(orders.map((o) => o.orderId));
+      const cached = await getAllCachedOrders().catch(() => []);
+      const store = db.transaction([getStoreName()], 'readwrite').objectStore(getStoreName());
+      cached.forEach((o) => {
+        if (!keep.has(o.orderId)) store.delete(o.orderId);
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // Refresh the modal if it's open
-        if (!ordersModal.classList.contains('hidden')) {
-          loadOrders();
-        }
-      } else {
-        const errMsg = data.error || `Server returned ${res.status}`;
-        console.error('Status update failed:', errMsg);
-        alert(`Failed to update status: ${errMsg}`);
-      }
-    } catch (e) {
-      console.error('Status update network error:', e);
-      alert('Network error — check your internet connection.');
     }
-  };
+    for (const o of orders) await cacheOrder(o).catch(() => undefined);
+    render();
+  }
+
+  filterBox.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-filter]');
+    if (!btn) return;
+    filter = btn.dataset.filter;
+    filterBox.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    render();
+  });
+  search.addEventListener('input', render);
+  refreshBtn.addEventListener('click', load);
+
+  tbody.addEventListener('click', async (e) => {
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      const order = orders.find((o) => o.orderId === open.dataset.open);
+      if (order) window.electronAPI.openOrderWindow(order);
+      return;
+    }
+    const btn = e.target.closest('[data-move], [data-book]');
+    if (!btn) return;
+    const order = orders.find((o) => o.orderId === (btn.dataset.move || btn.dataset.book));
+    if (!order) return;
+    setBusy(btn, true);
+    const updated = btn.dataset.book ? await bookCourierFor(order) : await moveOrder(order, btn.dataset.status);
+    setBusy(btn, false);
+    if (updated) await load();
+  });
+
+  return { load };
 }

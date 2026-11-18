@@ -5,193 +5,114 @@ const { generateDeliveryNumber } = require("../../deliveryNumber");
 const { waitForPrinterIdle } = require("./spoolerCheck");
 const { saveQueue } = require("./queueStore");
 
-/**
- * Classify whether a print error is a printer-hardware issue
- */
-function _isPrinterIssue(errorMessage) {
-  const lower = errorMessage.toLowerCase();
+const MAX_ATTEMPTS = 5;
+
+/** Whether a print error means the printer itself is unavailable. */
+function isPrinterIssue(errorMessage) {
+  const lower = String(errorMessage).toLowerCase();
   return (
     lower.includes("printer not connected") ||
     lower.includes("printer is offline") ||
     lower.includes("printer not found") ||
+    lower.includes("printer is not available") ||
     lower.includes("unable to initialize device") ||
     lower.includes("powered off")
   );
 }
 
-/**
- * Calculate retry wait time with exponential backoff (max 5 minutes)
- */
-function _retryWaitMs(attempts, errorMessage) {
-  const base = _isPrinterIssue(errorMessage) ? 30000 : 10000;
+/** Linear backoff, longer for printer problems, at most 5 minutes. */
+function retryWaitMs(attempts, errorMessage) {
+  const base = isPrinterIssue(errorMessage) ? 30000 : 10000;
   return Math.min(attempts * base, 300000);
 }
 
+function removeEntry(printQueue, entry) {
+  const idx = printQueue.indexOf(entry);
+  if (idx !== -1) printQueue.splice(idx, 1);
+  saveQueue(printQueue);
+}
+
 /**
- * Process queue sequentially — waits for printer to be fully idle between jobs.
+ * Prints pending entries one at a time, waiting for the printer to be idle
+ * before and after each one. Returns when nothing is pending or the queue is paused.
  *
- * Each job is a "transaction":
- *   1. Status → 'printing', saved to file
- *   2. Wait for printer spooler idle
- *   3. Send job to printer
- *   4. Wait for printer to finish physically
- *   5. Status → 'completed', removed from queue
- *
- * @param {Array} printQueue  — mutable queue array (shared with queueManager)
- * @param {Function} getCallback — returns the current onJobComplete callback (or null)
- * @param {Function} setProcessing — setter for the isProcessing flag
+ * @param {Array} printQueue shared queue array (mutated in place only)
+ * @param {{ onComplete: Function, onFailed: Function, isPaused: Function }} hooks
  */
-async function processQueue(printQueue, getCallback, setProcessing) {
-  console.log(
-    "🖨️ Queue processor started - will process jobs one at a time, waiting for printer idle between jobs"
-  );
+async function processQueue(printQueue, hooks) {
+  while (!hooks.isPaused()) {
+    const entry = printQueue.find((j) => j.status === "pending");
+    if (!entry) break;
 
-  while (printQueue.length > 0) {
-    // Find first pending job
-    const queuedJob = printQueue.find((j) => j.status === "pending");
-    if (!queuedJob) {
-      // No pending jobs left — clean up and exit
-      const remaining = printQueue.filter(
-        (j) => j.status === "pending"
-      );
-      printQueue.length = 0;
-      remaining.forEach((j) => printQueue.push(j));
-      saveQueue(printQueue);
-      break;
-    }
-
-    // STEP 1: Wait for printer idle
     try {
       await waitForPrinterIdle();
     } catch (idleError) {
-      console.warn(
-        `⚠️ Error waiting for printer idle, proceeding anyway:`,
-        idleError
-      );
+      console.warn("⚠️ Could not check printer idle state, continuing:", idleError);
     }
+    // Removed (cancelled) while we waited
+    if (!printQueue.includes(entry) || entry.status !== "pending") continue;
 
-    // STEP 2: Mark as 'printing'
-    queuedJob.status = "printing";
-    queuedJob.attempts++;
-    queuedJob.lastAttemptAt = new Date();
+    entry.status = "printing";
+    entry.attempts++;
+    entry.lastAttemptAt = new Date();
     saveQueue(printQueue);
+    console.log(`🖨️ Printing ${entry.job.fileName} (attempt ${entry.attempts}/${MAX_ATTEMPTS})`);
 
-    console.log(`\n${"=".repeat(60)}`);
-    console.log(
-      `🖨️ PRINTING JOB: ${queuedJob.id} (Attempt ${queuedJob.attempts})`
-    );
-    console.log(`📄 File: ${queuedJob.job.fileName}`);
-    console.log(
-      `📋 Delivery: ${queuedJob.job.deliveryNumber || "pending"}`
-    );
-    console.log(
-      `📊 Queue position: 1 of ${printQueue.filter((j) => j.status === "pending").length + 1} jobs`
-    );
-    console.log(`${"=".repeat(60)}\n`);
-
+    let errorMessage = null;
     try {
-      // Generate delivery number if not present
-      if (!queuedJob.job.deliveryNumber) {
-        queuedJob.job.deliveryNumber = generateDeliveryNumber(
-          queuedJob.printerIndex
-        );
+      if (!entry.job.deliveryNumber) {
+        entry.job.deliveryNumber = generateDeliveryNumber(entry.printerIndex);
       }
-
-      // STEP 3: Send to printer
-      const result = await printJob(
-        queuedJob.job,
-        queuedJob.printerIndex
-      );
-
+      const result = await printJob(entry.job, entry.printerIndex);
       if (result.success) {
-        // STEP 4: Wait for printer to finish physically
-        console.log(
-          `⏳ Job sent to printer successfully. Waiting for printer to finish physically printing...`
-        );
+        // Let the spooler pick the job up, then wait until it has finished
         await new Promise((resolve) => setTimeout(resolve, 3000));
         await waitForPrinterIdle();
-
-        // STEP 5: Mark completed & remove
-        queuedJob.status = "completed";
-        queuedJob.completedAt = new Date();
-        const idx = printQueue.findIndex(
-          (j) => j.id === queuedJob.id
-        );
-        if (idx !== -1) printQueue.splice(idx, 1);
-        saveQueue(printQueue);
-
-        console.log(
-          `\n✅ Job ${queuedJob.id} COMPLETED successfully`
-        );
-        console.log(`📄 File: ${queuedJob.job.fileName}`);
-        console.log(
-          `📋 Remaining jobs in queue: ${printQueue.length}`
-        );
-        console.log(`${"─".repeat(60)}\n`);
-
-        const cb = getCallback();
-        if (cb) {
-          try {
-            cb(queuedJob.job);
-          } catch (err) {
-            console.error("Error in onJobCompleteCallback:", err);
-          }
-        }
       } else {
-        await _handleJobFailure(
-          queuedJob,
-          result.error || result.message || "Unknown error",
-          printQueue
-        );
+        errorMessage = result.error || result.message || "Unknown error";
       }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error(
-        `❌ Error processing job ${queuedJob.id}:`,
-        errorMessage
-      );
-      await _handleJobFailure(queuedJob, errorMessage, printQueue);
+      errorMessage = error instanceof Error ? error.message : String(error);
     }
-  }
 
-  setProcessing(false);
-  console.log(
-    "🏁 Queue processor finished - all jobs processed"
-  );
+    if (entry.cancelled) {
+      console.log(`🛑 ${entry.job.fileName} was cancelled while printing`);
+      removeEntry(printQueue, entry);
+      continue;
+    }
+
+    if (!errorMessage) {
+      entry.status = "completed";
+      entry.completedAt = new Date();
+      removeEntry(printQueue, entry);
+      console.log(`✅ Printed ${entry.job.fileName} (${printQueue.length} left in queue)`);
+      try {
+        hooks.onComplete(entry);
+      } catch (err) {
+        console.error("Error in onComplete hook:", err);
+      }
+      continue;
+    }
+
+    entry.error = errorMessage;
+    console.log(`❌ ${entry.job.fileName} failed (attempt ${entry.attempts}): ${errorMessage}`);
+    if (entry.attempts >= MAX_ATTEMPTS) {
+      entry.status = "failed";
+      removeEntry(printQueue, entry);
+      try {
+        hooks.onFailed(entry, `Gave up after ${MAX_ATTEMPTS} attempts: ${errorMessage}`);
+      } catch (err) {
+        console.error("Error in onFailed hook:", err);
+      }
+      continue;
+    }
+
+    entry.status = "pending";
+    saveQueue(printQueue);
+    const waitTime = retryWaitMs(entry.attempts, errorMessage);
+    console.log(`⏳ Retrying in ${waitTime / 1000}s`);
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
+  }
 }
 
-/**
- * Handle a failed job — retry or mark permanently failed
- */
-async function _handleJobFailure(queuedJob, errorMessage, printQueue) {
-  if (queuedJob.attempts >= 10) {
-    queuedJob.status = "failed";
-    queuedJob.error = `Max retries (10) reached. Last error: ${errorMessage}`;
-    saveQueue(printQueue);
-    console.log(
-      `❌ Job ${queuedJob.id} FAILED PERMANENTLY (Max 10 attempts reached): ${errorMessage}`
-    );
-  } else {
-    queuedJob.status = "pending";
-    queuedJob.error = errorMessage;
-    saveQueue(printQueue);
-    console.log(
-      `❌ Job ${queuedJob.id} FAILED (Attempt ${queuedJob.attempts}): ${errorMessage}`
-    );
-    console.log(`📋 Job will be retried.`);
-  }
-
-  if (_isPrinterIssue(errorMessage)) {
-    console.warn(`⚠️ Printer issue detected: ${errorMessage}`);
-    console.warn(
-      `⚠️ Job ${queuedJob.id} will be retried when printer is available`
-    );
-  }
-
-  const waitTime = _retryWaitMs(queuedJob.attempts, errorMessage);
-  console.log(`⏳ Waiting ${waitTime / 1000}s before retry...`);
-  await new Promise((resolve) => setTimeout(resolve, waitTime));
-}
-
-module.exports = { processQueue };
+module.exports = { processQueue, isPrinterIssue, MAX_ATTEMPTS };
