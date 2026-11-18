@@ -32,18 +32,17 @@
     <!-- Left Column: Login & System Status -->
     <div class="w-1/3 p-6 flex flex-col gap-6 border-r border-gray-200 overflow-y-auto custom-scrollbar">
       
-      <!-- Login Panel -->
+      <!-- Sign-in Panel -->
       <div id="login-panel" class="glass-panel rounded-xl p-6 shadow-xl">
-        <h2 class="text-lg font-bold mb-4">Authenticate Hardware</h2>
-        <p class="text-sm text-gray-500 mb-5">Connect this machine to your FunPrinting cloud account to begin receiving jobs.</p>
-        
-        <div class="space-y-4">
-          <button id="login-btn" class="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg transition-colors shadow-lg flex items-center justify-center gap-3">
+        <h2 class="text-lg font-bold mb-2">This computer</h2>
+        <p id="login-hint" class="text-sm text-gray-500 mb-4">Sign in with the Google account of your shop. Your browser opens to confirm.</p>
+        <div class="space-y-3">
+          <button id="login-btn" class="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg border border-gray-200 transition-colors shadow flex items-center justify-center gap-3">
             <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-            Sign In with Google
+            <span>Sign in with your FunPrinting account</span>
           </button>
-          
-          <input type="hidden" id="access-token" value="">
+          <button id="logout-btn" class="hidden w-full bg-white hover:bg-red-50 text-red-600 font-medium py-2 px-4 rounded-lg border border-red-200 transition-colors">Sign out this computer</button>
+          <p id="login-error" class="hidden text-sm text-red-600"></p>
         </div>
       </div>
 
@@ -104,32 +103,27 @@
       </div>
     </div>
 
-    <!-- Right Column: Print Queue & AIMD Monitoring -->
+    <!-- Right Column: Print jobs -->
     <div class="w-2/3 p-6 flex flex-col gap-6 bg-gray-50 overflow-hidden">
       <!-- Queue Header -->
       <div class="flex justify-between items-end">
         <div>
-          <h2 class="text-2xl font-bold text-gray-900">Live Print Queue</h2>
-          <p class="text-sm text-gray-500">Powered by AIMD Error Control</p>
+          <h2 class="text-2xl font-bold text-gray-900">Print jobs</h2>
+          <p class="text-sm text-gray-500">Paid orders for your shop. This computer prints them one at a time.</p>
         </div>
-        <div class="flex flex-col">
-          <span class="text-xs text-gray-500 mb-1">Engine Status</span>
-          <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium rounded-lg px-3 py-2 flex items-center gap-2">
-            <span class="relative flex h-3 w-3">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
-            </span>
-            Printer-API Engine Active
-          </div>
+        <div class="flex gap-2">
+          <button id="refresh-jobs-btn" class="text-sm bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-medium rounded-lg px-3 py-2">Refresh</button>
+          <button id="pause-btn" class="text-sm bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-medium rounded-lg px-3 py-2">Pause printing</button>
         </div>
       </div>
+      <div id="jobs-toolbar" class="space-y-2"></div>
 
       <!-- Queue Container -->
       <div id="queue-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-4 min-h-0 border-b border-gray-200 pb-4">
         <!-- Jobs will be injected here -->
         <div class="flex flex-col items-center justify-center h-full text-gray-500">
           <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-          <p>Waiting for print jobs from cloud...</p>
+          <p>Loading…</p>
         </div>
       </div>
 
@@ -264,6 +258,15 @@
             </label>
           </div>
 
+          <div class="border-t border-gray-200 pt-4 mt-4">
+            <label for="set-acceptance-mode" class="block text-sm font-bold text-blue-600">New orders</label>
+            <select id="set-acceptance-mode" class="mt-2 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900">
+              <option value="auto">Print automatically</option>
+              <option value="manual">I accept each order first</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">With "accept first", orders you haven't accepted within 10 minutes are offered a refund, and refunded after 24 hours.</p>
+          </div>
+
           <div class="border-t border-gray-200 pt-4 mt-4 flex items-center justify-between">
             <div>
               <label class="block text-sm font-bold text-blue-600">Developer Mode</label>
@@ -321,10 +324,11 @@
   </div>
 
   <!-- Modular JS -->
+  <script src="src/ui/util.js"></script>
   <script src="src/ui/orderCache.js"></script>
   <script src="src/ui/orders.js"></script>
   <script src="src/ui/auth.js"></script>
-  <script src="src/ui/queueUI.js"></script>
+  <script src="src/ui/jobs.js"></script>
   <script src="src/ui/settings.js"></script>
   <script src="src/ui/printers.js"></script>
   <script>
@@ -332,7 +336,7 @@
     initDB().then(() => {
       initOrders();
       initAuth();
-      initQueueUI();
+      initJobs();
       initSettings();
       initPrinters();
       initLiveLogs();

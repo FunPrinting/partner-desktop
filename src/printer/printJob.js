@@ -70,9 +70,10 @@ async function printJob(job, printerIndex) {
         : ".pdf";
     }
 
+    const safeName = String(job.deliveryNumber || "job").replace(/[^A-Za-z0-9_-]/g, "_");
     const tempFilePath = path.join(
       tempDir,
-      `${job.deliveryNumber}${fileExtension}`
+      `${safeName}_${Date.now()}${fileExtension.replace(/[^A-Za-z0-9.]/g, "")}`
     );
     const fileExtLower = fileExtension.toLowerCase();
 

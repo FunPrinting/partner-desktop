@@ -2,7 +2,7 @@
  * Window creation + console log interception
  */
 
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, shell } = require('electron');
 const path = require('path');
 
 let mainWindow = null;
@@ -21,6 +21,17 @@ function createWindow() {
     backgroundColor: '#111827'
   });
 
+  // Links open in the browser; the app window never navigates away from the app
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
   mainWindow.loadFile(path.join(__dirname, '..', '..', 'index.html'));
   _interceptConsoleLogs();
   return mainWindow;

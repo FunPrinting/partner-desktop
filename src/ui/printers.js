@@ -42,7 +42,13 @@ function initPrinters() {
 
       if (!printers || printers.length === 0) {
         listEl.innerHTML = '<div class="text-sm text-red-600 text-center py-2">No printers found on this system.</div>';
+        window.electronAPI.setActivePrinter(null);
         return;
+      }
+
+      // The saved printer was removed: fall back to the system default
+      if (activePrinterName && !printers.some(p => p.name === activePrinterName)) {
+        activePrinterName = null;
       }
 
       printers.forEach(printer => {
@@ -61,11 +67,11 @@ function initPrinters() {
         const dotColor = isActive ? 'bg-green-500' : 'bg-gray-600';
 
         listEl.innerHTML += `
-          <div onclick="window.togglePrinter('${printer.name.replace(/'/g, "\\'")}')" class="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-gray-100 transition-colors ${bgClass}">
+          <div data-printer="${esc(printer.name)}" class="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-gray-100 transition-colors ${bgClass}">
             <div class="flex items-center gap-3">
               <svg class="w-5 h-5 ${isActive ? 'text-blue-600' : 'text-gray-500'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
               <div class="overflow-hidden">
-                <p class="font-medium text-sm truncate" title="${printer.name}">${printer.name}</p>
+                <p class="font-medium text-sm truncate" title="${esc(printer.name)}">${esc(printer.name)}</p>
                 <p class="text-xs ${statusColor} font-semibold">${statusText}</p>
               </div>
             </div>
@@ -78,6 +84,11 @@ function initPrinters() {
       listEl.innerHTML = '<div class="text-sm text-red-600 text-center py-2">Failed to scan printers.</div>';
     }
   }
+
+  document.getElementById('printers-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-printer]');
+    if (row) window.togglePrinter(row.dataset.printer);
+  });
 
   // Expose for the Refresh button onclick
   window.loadPrinters = loadPrinters;
@@ -99,8 +110,9 @@ function initLiveLogs() {
       if (logData.level === 'error') colorClass = 'text-red-400';
       if (logData.level === 'warn') colorClass = 'text-yellow-400';
 
-      div.innerHTML = `<span class="text-gray-500">[${time}]</span> <span class="${colorClass}">${logData.message}</span>`;
+      div.innerHTML = `<span class="text-gray-500">[${esc(time)}]</span> <span class="${colorClass}">${esc(logData.message)}</span>`;
       liveLogs.appendChild(div);
+      while (liveLogs.childElementCount > 500) liveLogs.firstElementChild.remove();
 
       if (liveLogs.scrollHeight - liveLogs.scrollTop <= liveLogs.clientHeight + 100) {
         liveLogs.scrollTop = liveLogs.scrollHeight;

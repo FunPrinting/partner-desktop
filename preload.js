@@ -1,26 +1,57 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+/** Subscribe to a main-process event; returns an unsubscribe function. */
+function listen(channel, callback) {
+  const handler = (_event, data) => callback(data);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
-  login: (credentials) => ipcRenderer.send('login', credentials),
-  onStatus: (callback) => ipcRenderer.on('status', (_event, data) => callback(data)),
-  onIncomingJob: (callback) => ipcRenderer.on('incoming_job', (_event, data) => callback(data)),
-  onPrintStatus: (callback) => ipcRenderer.on('print_status', (_event, data) => callback(data)),
-  updateOrderStatus: (jobId, status) => ipcRenderer.invoke('update_order_status', { jobId, status }),
-  resumePrint: (jobId) => ipcRenderer.send('resume_print', { jobId }),
-  startOAuth: () => ipcRenderer.send('start-oauth'),
-  onOAuthSuccess: (callback) => ipcRenderer.on('oauth-success', (_event, data) => callback(data)),
-  checkUpdates: () => ipcRenderer.send('check-updates'),
-  onUpdateMessage: (callback) => ipcRenderer.on('update-message', (_event, data) => callback(data)),
-  injectJob: (job) => ipcRenderer.send('inject_job', job),
-  cancelJob: (jobId) => ipcRenderer.send('cancel_job', jobId),
+  // Sign-in
+  getSession: () => ipcRenderer.invoke('session:get'),
+  signIn: () => ipcRenderer.invoke('session:sign-in'),
+  signOut: () => ipcRenderer.invoke('session:sign-out'),
+  onSessionChanged: (cb) => listen('session-changed', cb),
+  onSignedOut: (cb) => listen('signed-out', cb),
+  onStatus: (cb) => listen('status', cb),
+
+  // Partner web API (/api/partner/... only); resolves { ok, status, data }
+  api: (method, path, body) => ipcRenderer.invoke('api:request', { method, path, body }),
+  updateOrderStatus: (orderId, status) =>
+    ipcRenderer.invoke('api:request', { method: 'PATCH', path: `/api/partner/orders/${encodeURIComponent(orderId)}`, body: { status } }),
+
+  // Print jobs
+  getJobs: () => ipcRenderer.invoke('jobs:get'),
+  syncJobs: () => ipcRenderer.invoke('jobs:sync'),
+  jobAction: (jobId, action, reason) => ipcRenderer.invoke('jobs:action', { jobId, action, reason }),
+  setPaused: (paused) => ipcRenderer.invoke('jobs:set-paused', paused),
+  onJobsChanged: (cb) => listen('jobs-changed', cb),
+  onPrintStatus: (cb) => listen('print_status', cb),
+
+  // Local queue
+  getQueue: () => ipcRenderer.invoke('queue:get'),
+  printAgain: (order) => ipcRenderer.invoke('queue:print-again', order),
+
+  // Printers
+  getPrinters: () => ipcRenderer.invoke('printers:list'),
+  setActivePrinter: (name) => ipcRenderer.send('printers:set-active', name),
+
+  // Windows, updates, logs, errors
   openOrderWindow: (order) => ipcRenderer.send('open-order-window', order),
-  onOrderData: (callback) => ipcRenderer.on('order-data', (_event, data) => callback(data)),
-  onAuthSuccess: (callback) => ipcRenderer.on('auth-success', (_event, data) => callback(data)),
-  getPrinters: () => ipcRenderer.invoke('get-printers'),
-  setActivePrinter: (printerName) => ipcRenderer.send('set_active_printer', printerName),
-  getQueue: () => ipcRenderer.invoke('get-queue'),
-  onSystemLog: (callback) => ipcRenderer.on('system-log', (_event, data) => callback(data)),
-  onJobCompleted: (callback) => ipcRenderer.on('job-completed', (_event, data) => callback(data)),
-  onJobCancelled: (callback) => ipcRenderer.on('job-cancelled', (_event, data) => callback(data)),
-  clearData: () => ipcRenderer.send('clear-data')
+  onOrderData: (cb) => listen('order-data', cb),
+  checkUpdates: () => ipcRenderer.send('check-updates'),
+  onUpdateMessage: (cb) => listen('update-message', cb),
+  onSystemLog: (cb) => listen('system-log', cb),
+  reportError: (report) => ipcRenderer.send('report-error', report),
+  clearData: () => ipcRenderer.invoke('clear-data'),
+});
+
+// Renderer errors go to the error log too
+window.addEventListener('error', (e) => {
+  ipcRenderer.send('report-error', { name: e.error?.name, message: String(e.message || e.error?.message || 'Error'), stack: e.error?.stack, url: location.href });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  ipcRenderer.send('report-error', { name: r?.name, message: String(r?.message || r || 'Unhandled rejection'), stack: r?.stack, url: location.href });
 });

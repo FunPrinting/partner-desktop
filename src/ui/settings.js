@@ -13,15 +13,19 @@ function initSettings() {
     div.className = "flex gap-2 items-start bg-gray-50/50 p-2 rounded border border-gray-200 flex-col sm:flex-row";
     div.innerHTML = `
       <div class="flex-1 w-full space-y-2">
-        <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${name}">
-        <input type="text" placeholder="Contact Number (Optional)" class="dp-contact w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${contactNumber}">
+        <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
+        <input type="text" placeholder="Contact Number (Optional)" class="dp-contact w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
         <div class="flex gap-2">
-          <input type="number" step="any" placeholder="Lat" class="dp-lat w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${lat}">
-          <input type="number" step="any" placeholder="Lng" class="dp-lng w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900" value="${lng}">
+          <input type="number" step="any" placeholder="Lat" class="dp-lat w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
+          <input type="number" step="any" placeholder="Lng" class="dp-lng w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
         </div>
       </div>
       <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
     `;
+    div.querySelector('.dp-name').value = name;
+    div.querySelector('.dp-contact').value = contactNumber;
+    div.querySelector('.dp-lat').value = lat;
+    div.querySelector('.dp-lng').value = lng;
     dpContainer.appendChild(div);
   }
 
@@ -30,9 +34,10 @@ function initSettings() {
     const div = document.createElement('div');
     div.className = "flex gap-2 items-center";
     div.innerHTML = `
-      <input type="text" placeholder="e.g. +919876543210" class="shop-phone w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-900" value="${phone}">
+      <input type="text" placeholder="e.g. +919876543210" class="shop-phone w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-900">
       <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
     `;
+    div.querySelector('.shop-phone').value = phone;
     container.appendChild(div);
   }
 
@@ -42,18 +47,16 @@ function initSettings() {
   // ── Open Settings ──────────────────────────────────────────────────
 
   document.getElementById('open-settings-btn').addEventListener('click', async () => {
-    const token = document.getElementById('access-token').value;
-    if (!token) {
+    const session = await window.electronAPI.getSession();
+    if (!session.signedIn) {
       alert("Please sign in first.");
       return;
     }
 
-    document.getElementById('open-settings-btn').innerHTML = 'Loading...';
+    document.getElementById('open-settings-btn').innerText = 'Loading...';
     try {
-      const res = await fetch('https://www.funprinting.store/api/partner/profile', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const { ok, data } = await window.electronAPI.api('GET', '/api/partner/profile');
+      if (!ok) throw new Error(data.error || 'Request failed');
       if (data.success && data.partner) {
         _populateForm(data.partner, addPhoneUI, addDeliveryPointUI);
       }
@@ -65,7 +68,7 @@ function initSettings() {
       console.error(err);
       alert("Failed to load profile data");
     }
-    document.getElementById('open-settings-btn').innerHTML = 'Manage Shop Profile';
+    document.getElementById('open-settings-btn').innerText = 'Manage Shop Profile';
   });
 
   // ── Close Settings ─────────────────────────────────────────────────
@@ -77,7 +80,6 @@ function initSettings() {
   // ── Save Settings ──────────────────────────────────────────────────
 
   document.getElementById('save-settings-btn').addEventListener('click', async () => {
-    const token = document.getElementById('access-token').value;
     const saveBtn = document.getElementById('save-settings-btn');
 
     const dps = Array.from(document.getElementById('dp-container').children).map(div => ({
@@ -117,6 +119,7 @@ function initSettings() {
         binding: parseFloat(document.getElementById('set-price-binding').value) || 40
       },
       isOnline: document.getElementById('set-is-online').checked,
+      acceptanceMode: document.getElementById('set-acceptance-mode').value === 'manual' ? 'manual' : 'auto',
       deliveryPoints: dps,
       phoneNumbers: phoneNumbers
     };
@@ -125,17 +128,10 @@ function initSettings() {
     saveBtn.disabled = true;
 
     try {
-      const res = await fetch('https://www.funprinting.store/api/partner/profile', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
+      const { data } = await window.electronAPI.api('POST', '/api/partner/profile', payload);
       if (data.success) {
         closeSettings();
+        window.electronAPI.syncJobs();
       } else {
         alert('Failed to save profile: ' + data.error);
       }
@@ -165,6 +161,7 @@ function initSettings() {
       document.getElementById('set-price-color').value = partner.pricing.perPageColor || 10;
       document.getElementById('set-price-binding').value = partner.pricing.binding || 40;
     }
+    document.getElementById('set-acceptance-mode').value = partner.acceptanceMode === 'manual' ? 'manual' : 'auto';
     if (partner.isOnline !== undefined) {
       document.getElementById('set-is-online').checked = partner.isOnline;
     }

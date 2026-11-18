@@ -1,153 +1,120 @@
 /**
- * Authentication — OAuth login, auto-login, status badge, financials
+ * Sign-in panel, connection badge, earnings, updates and "clear data".
+ * Tokens live in the main process; this file only sees signed-in / signed-out.
  */
 
 function initAuth() {
   const loginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const loginHint = document.getElementById('login-hint');
+  const loginError = document.getElementById('login-error');
   const statusBadge = document.getElementById('status-badge');
-  let isAuthenticated = false;
+  let signedIn = false;
 
-  // ── Login Button ───────────────────────────────────────────────────
+  // Tokens from the earlier app version are no longer used
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('partnerId');
 
-  loginBtn.addEventListener('click', () => {
-    loginBtn.innerHTML = "Opening browser...";
-    window.electronAPI.startOAuth();
-  });
+  function setBadge(kind, text) {
+    const styles = {
+      online: ['bg-green-100 text-green-700 border-green-200', 'bg-green-500'],
+      connecting: ['bg-yellow-100 text-yellow-800 border-yellow-200', 'bg-yellow-500 animate-pulse'],
+      offline: ['bg-red-100 text-red-600 border-red-200', 'bg-red-500'],
+    }[kind];
+    statusBadge.className = `flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-medium transition-colors ${styles[0]}`;
+    statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full ${styles[1]}"></span> ${esc(text)}`;
+  }
 
-  // ── OAuth Success ──────────────────────────────────────────────────
-
-  window.electronAPI.onOAuthSuccess(({ partnerId, token }) => {
-    if (window.electronAPI.setPaths) {
-      const cp = localStorage.getItem('chromePath') || '';
-      const lp = localStorage.getItem('librePath') || '';
-      window.electronAPI.setPaths({ chromePath: cp, librePath: lp });
+  let rendered = null;
+  function renderSession(state) {
+    const next = Boolean(state && state.signedIn);
+    // 'session-changed' also fires on every token refresh; only redraw on a real change
+    if (rendered === next && !loginBtn.disabled) return;
+    rendered = next;
+    signedIn = next;
+    loginBtn.classList.toggle('hidden', signedIn);
+    logoutBtn.classList.toggle('hidden', !signedIn);
+    loginBtn.disabled = false;
+    loginBtn.querySelector('span').innerText = 'Sign in with your FunPrinting account';
+    loginHint.innerText = signedIn
+      ? 'This computer is signed in and prints your shop\'s orders. You can sign it out here or from the web dashboard (Signed-in apps).'
+      : 'Sign in with the Google account of your shop. Your browser opens to confirm.';
+    if (signedIn) {
+      setBadge('connecting', 'Connecting…');
+      fetchFinancials();
+    } else {
+      setBadge('offline', 'Signed out');
+      document.getElementById('financials-panel').classList.add('hidden');
     }
+  }
 
-    localStorage.setItem('partnerId', partnerId);
-    localStorage.setItem('authToken', token);
-
-    document.getElementById('access-token').value = token;
-    loginBtn.innerHTML = "Connecting Engine...";
-    window.electronAPI.login({ partnerId, token });
-  });
-
-  // ── Auto-login on startup ─────────────────────────────────────────
-
-  window.addEventListener('DOMContentLoaded', () => {
-    const savedPartnerId = localStorage.getItem('partnerId');
-    const savedToken = localStorage.getItem('authToken');
-    if (savedPartnerId && savedToken) {
-      document.getElementById('access-token').value = savedToken;
-      loginBtn.innerHTML = "Connecting Engine...";
-      window.electronAPI.login({ partnerId: savedPartnerId, token: savedToken });
-    }
-
-    // Recover print queue immediately
-    if (window.electronAPI.getQueue) {
-      window.electronAPI.getQueue().then(queue => {
-        if (queue && queue.length > 0) {
-          queue.forEach(job => renderJobCard(job));
-        }
-      }).catch(err => console.error("Failed to load initial queue", err));
-    }
-  });
-
-  // ── Auth Success (backend confirmed) ──────────────────────────────
-
-  window.electronAPI.onAuthSuccess(({ partnerId }) => {
-    isAuthenticated = true;
-    statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-800/50 text-sm font-medium transition-colors";
-    statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Authenticated';
-    loginBtn.innerText = "Authenticated ✓";
+  loginBtn.addEventListener('click', async () => {
+    loginError.classList.add('hidden');
     loginBtn.disabled = true;
-    loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-    fetchFinancials();
-
-    // Also start populating the queue immediately after auth
-    if (typeof window.fetchAndInjectOrders === 'function') {
-      console.log('[Auto-Sync] Auth success — fetching orders for queue...');
-      window.fetchAndInjectOrders();
+    loginBtn.querySelector('span').innerText = 'Waiting for the browser…';
+    const result = await window.electronAPI.signIn();
+    if (!result.ok) {
+      loginError.innerText = result.error || 'Sign-in failed';
+      loginError.classList.remove('hidden');
+      renderSession({ signedIn: false });
     }
   });
 
-  // ── Cloud Connection Status ────────────────────────────────────────
+  logoutBtn.addEventListener('click', async () => {
+    if (!confirm('Sign this computer out? It stops printing your shop\'s orders until you sign in again.')) return;
+    logoutBtn.disabled = true;
+    await window.electronAPI.signOut();
+    logoutBtn.disabled = false;
+  });
+
+  window.electronAPI.onSessionChanged(renderSession);
+  window.electronAPI.onSignedOut(({ reason }) => {
+    loginError.innerText = `Signed out: ${reason}`;
+    loginError.classList.remove('hidden');
+  });
+  window.electronAPI.getSession().then(renderSession);
 
   window.electronAPI.onStatus((data) => {
+    if (!signedIn) return setBadge('offline', 'Signed out');
     if (data.connected) {
-      statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200 text-sm font-medium transition-colors";
-      statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Online';
-      loginBtn.innerText = "Connected";
-      loginBtn.disabled = true;
-      loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      setBadge('online', 'Online');
       fetchFinancials();
-
-      // AUTO-FETCH: Populate the home page queue with existing orders
-      if (typeof window.fetchAndInjectOrders === 'function') {
-        console.log('[Auto-Sync] WSS connected — fetching orders for queue...');
-        window.fetchAndInjectOrders();
-      }
     } else {
-      if (isAuthenticated) {
-        statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/50 text-yellow-400 border border-yellow-800/50 text-sm font-medium transition-colors";
-        statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> Engine Connecting...';
-        loginBtn.innerText = "Authenticated ✓";
-        loginBtn.disabled = true;
-        loginBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      } else {
-        statusBadge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 text-red-600 border border-red-200 text-sm font-medium transition-colors";
-        statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline';
-        loginBtn.innerText = "Connect Engine";
-        loginBtn.disabled = false;
-        loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-      }
+      setBadge('connecting', data.message || 'Connecting…');
     }
   });
 
-  // ── Financials ─────────────────────────────────────────────────────
+  // ── Earnings ───────────────────────────────────────────────────────
 
-  function fetchFinancials() {
-    const token = document.getElementById('access-token').value;
-    fetch('https://www.funprinting.store/api/partner/financials', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => res.json())
-    .then(resData => {
-      if (resData.success && resData.financials) {
-        document.getElementById('financials-panel').classList.remove('hidden');
-        document.getElementById('today-earnings').innerText = `₹${resData.financials.todayEarnings.toLocaleString()}`;
-        document.getElementById('total-earnings').innerText = `₹${resData.financials.totalEarnings.toLocaleString()}`;
-        document.getElementById('total-orders').innerText = resData.financials.completedOrdersCount;
-      }
-    })
-    .catch(err => console.error("Failed to fetch financials:", err));
+  async function fetchFinancials() {
+    const { ok, data } = await window.electronAPI.api('GET', '/api/partner/financials');
+    if (!ok || !data.success || !data.financials) return;
+    const f = data.financials;
+    document.getElementById('financials-panel').classList.remove('hidden');
+    document.getElementById('today-earnings').innerText = `₹${Number(f.todayEarnings || 0).toLocaleString()}`;
+    document.getElementById('total-earnings').innerText = `₹${Number(f.totalEarnings || 0).toLocaleString()}`;
+    document.getElementById('total-orders').innerText = String(f.completedOrdersCount ?? 0);
   }
 
   // ── Updates ────────────────────────────────────────────────────────
 
-  const checkUpdateBtn = document.getElementById('check-update-btn');
   const updateBtnText = document.getElementById('update-btn-text');
-
-  checkUpdateBtn.addEventListener('click', () => {
-    window.electronAPI.checkUpdates();
-  });
-
+  document.getElementById('check-update-btn').addEventListener('click', () => window.electronAPI.checkUpdates());
   window.electronAPI.onUpdateMessage((msg) => {
     updateBtnText.innerText = msg;
   });
 
-  // ── Clear Data ─────────────────────────────────────────────────────
+  // ── Clear data ─────────────────────────────────────────────────────
 
   document.getElementById('clear-data-btn').addEventListener('click', async () => {
-    if (confirm('Are you sure you want to clear all app data? This will log you out and permanently clear the local print queue.')) {
-      localStorage.clear();
-      const db = getDB();
-      if (db) {
-        const tx = db.transaction(getStoreName(), 'readwrite');
-        tx.objectStore(getStoreName()).clear();
-      }
-      window.electronAPI.clearData();
-      window.location.reload();
+    if (!confirm('Clear all app data? This signs the computer out and empties the local print queue. A job being printed is handed back to your shop\'s queue.')) return;
+    localStorage.clear();
+    const db = getDB();
+    if (db) {
+      const tx = db.transaction(getStoreName(), 'readwrite');
+      tx.objectStore(getStoreName()).clear();
     }
+    await window.electronAPI.clearData();
+    window.location.reload();
   });
 }
