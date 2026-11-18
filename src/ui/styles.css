@@ -207,6 +207,7 @@ a { color: var(--primary); }
 .btn-plain { background: transparent; border-color: transparent; color: var(--primary); padding: 0 6px; }
 .btn-plain:hover { background: var(--primary-soft); }
 .btn-lg { height: 42px; padding: 0 20px; font-size: 15px; }
+.btn-sm { height: 30px; padding: 0 10px; font-size: 13px; }
 .btn-icon { width: 34px; padding: 0; }
 .btn .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

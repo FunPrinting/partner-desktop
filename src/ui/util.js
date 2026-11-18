@@ -131,3 +131,86 @@ function playChime() {
     // no audio device
   }
 }
+
+// ── Order fulfilment (same rules as the server, src/lib/partnerOrderTransitions.ts) ──
+
+const ORDER_STATUS_LABEL = {
+  pending_payment: 'Awaiting payment', paid: 'Paid', processing: 'Processing', printing: 'Printing', printed: 'Printed',
+  ready_for_pickup: 'Ready for pickup', dispatched: 'Out for delivery', delivered: 'Delivered', completed: 'Collected',
+  cancelled: 'Cancelled', refunded: 'Refunded',
+};
+const STATUS_RANK = { paid: 0, processing: 1, printing: 2, printed: 3, ready_for_pickup: 4, dispatched: 5, delivered: 6, completed: 7 };
+
+/** 'pickup' | 'shop' (the shop delivers) | 'courier' */
+function fulfilmentOf(order) {
+  if (order?.deliveryOption?.type !== 'delivery') return 'pickup';
+  return order.deliveryOption.method === 'shop' ? 'shop' : 'courier';
+}
+
+function fulfilmentLabel(order) {
+  const how = fulfilmentOf(order);
+  if (how === 'shop') return `You deliver${order.deliveryOption?.distance ? ` · ${order.deliveryOption.distance} km` : ''}`;
+  if (how === 'courier') return order.shiprocket?.awbCode ? `Courier · ${order.shiprocket.courierName || 'booked'}` : 'Courier';
+  return 'Pickup';
+}
+
+/** The next step(s) to offer for this order. */
+function nextStatuses(order) {
+  const rank = STATUS_RANK[order?.status] ?? -1;
+  if (rank < 0) return [];
+  if (rank < STATUS_RANK.printed) return ['printing', 'printed'].filter((s) => STATUS_RANK[s] > rank);
+  const steps = { pickup: ['ready_for_pickup', 'completed'], shop: ['dispatched', 'delivered'], courier: [] }[fulfilmentOf(order)];
+  return steps.filter((s) => STATUS_RANK[s] > rank).slice(0, 1);
+}
+
+/** Printed courier order without a booking yet. */
+function canBookCourier(order) {
+  return fulfilmentOf(order) === 'courier' && order.status === 'printed' && !order.shiprocket?.awbCode;
+}
+
+/** 90% of the printing, plus the whole delivery fee when the shop delivers itself. */
+function partnerShare(order) {
+  const amount = Number(order?.amount || 0);
+  const delivery = order?.deliveryOption?.type === 'delivery' ? Number(order.deliveryOption.deliveryCharge || 0) : 0;
+  return Math.round(((amount - delivery) * 0.9 + (fulfilmentOf(order) === 'shop' ? delivery : 0)) * 100) / 100;
+}
+
+/**
+ * Moves an order, asking for the customer's delivery code when needed.
+ * Resolves the updated order, or null if cancelled or failed (the error is shown).
+ */
+async function moveOrder(order, status) {
+  let code;
+  if (status === 'delivered' && fulfilmentOf(order) === 'shop') {
+    code = await ask({ title: `Delivered order ${order.orderId}?`, message: 'Ask the customer for the 4-digit delivery code shown in their order.', ok: 'Confirm delivery', input: { label: 'Delivery code', placeholder: '0000' } });
+    if (code === null) return null;
+    code = code.replace(/\D/g, '');
+  }
+  for (;;) {
+    const result = await window.electronAPI.updateOrderStatus(order.orderId, status, code);
+    if (result.ok) {
+      toast(`Order ${order.orderId}: ${ORDER_STATUS_LABEL[status] || status}.`);
+      return result.data.order || { ...order, status };
+    }
+    if (code !== undefined && result.data?.code === 'handover_wrong') {
+      code = await ask({ title: 'Wrong code', message: result.data.error, ok: 'Try again', input: { label: 'Delivery code', placeholder: '0000' } });
+      if (code === null) return null;
+      code = code.replace(/\D/g, '');
+      continue;
+    }
+    await ask({ title: 'Could not update the order', message: result.data?.error || `Error ${result.status}`, cancel: null });
+    return null;
+  }
+}
+
+async function bookCourierFor(order) {
+  const go = await ask({ title: `Book a courier for order ${order.orderId}?`, message: 'A courier will come to your shop to collect the parcel. Pack it with the order number on it.', ok: 'Book courier' });
+  if (!go) return null;
+  const result = await window.electronAPI.bookCourier(order.orderId);
+  if (!result.ok) {
+    await ask({ title: 'Could not book the courier', message: result.data?.error || `Error ${result.status}`, cancel: null });
+    return null;
+  }
+  toast(`Courier booked: ${result.data.courierName}, AWB ${result.data.awbCode}.`);
+  return result.data.order || order;
+}

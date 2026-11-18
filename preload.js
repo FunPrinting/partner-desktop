@@ -18,8 +18,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Partner web API (/api/partner/... only); resolves { ok, status, data }
   api: (method, path, body) => ipcRenderer.invoke('api:request', { method, path, body }),
-  updateOrderStatus: (orderId, status) =>
-    ipcRenderer.invoke('api:request', { method: 'PATCH', path: `/api/partner/orders/${encodeURIComponent(orderId)}`, body: { status } }),
+  // code: the customer's 4-digit delivery code, needed when the shop delivers itself
+  updateOrderStatus: (orderId, status, code) =>
+    ipcRenderer.invoke('api:request', { method: 'PATCH', path: `/api/partner/orders/${encodeURIComponent(orderId)}`, body: code === undefined ? { status } : { status, code } }),
+  bookCourier: (orderId) =>
+    ipcRenderer.invoke('api:request', { method: 'POST', path: `/api/partner/orders/${encodeURIComponent(orderId)}/ship` }),
 
   // Print jobs
   getJobs: () => ipcRenderer.invoke('jobs:get'),

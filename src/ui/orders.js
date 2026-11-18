@@ -5,30 +5,6 @@
  * (IndexedDB) so it still shows when offline.
  */
 
-const NEXT_STATUSES = {
-  paid: ['printing', 'printed'],
-  processing: ['printing', 'printed'],
-  printing: ['printed'],
-  printed: ['ready_for_pickup', 'delivered', 'completed'],
-  ready_for_pickup: ['delivered', 'completed'],
-  dispatched: ['delivered', 'completed'],
-  delivered: ['completed'],
-};
-
-const STATUS_LABEL = {
-  pending_payment: 'Awaiting payment',
-  paid: 'Paid',
-  processing: 'Processing',
-  printing: 'Printing',
-  printed: 'Printed',
-  ready_for_pickup: 'Ready for pickup',
-  dispatched: 'Dispatched',
-  delivered: 'Delivered',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
-};
-
 const DONE_STATUSES = new Set(['completed', 'delivered', 'cancelled', 'refunded']);
 
 function statusTone(status) {
@@ -65,23 +41,21 @@ function initOrders() {
     const rows = visible();
     tbody.innerHTML = rows
       .map((o) => {
-        const next = NEXT_STATUSES[o.status] || [];
+        const next = nextStatuses(o);
         const name = o.originalFileName || o.originalFileNames?.[0] || 'Document';
         const files = o.originalFileNames?.length || 1;
-        const action = next.length
-          ? `<select class="select input-sm order-status" data-order="${esc(o.orderId)}" aria-label="Move order ${esc(o.orderId)} to">
-               <option value="" selected disabled>Move to…</option>
-               ${next.map((s) => `<option value="${esc(s)}">${esc(STATUS_LABEL[s] || s)}</option>`).join('')}
-             </select>`
-          : '';
+        const action = canBookCourier(o)
+          ? `<button class="btn btn-sm" data-book="${esc(o.orderId)}">${icon('truck', 'icon-sm')}Book courier</button>`
+          : next.map((s) => `<button class="btn btn-sm" data-move="${esc(o.orderId)}" data-status="${esc(s)}">${esc(ORDER_STATUS_LABEL[s] || s)}</button>`).join(' ');
         return `
           <tr>
             <td><button class="btn btn-plain mono" data-open="${esc(o.orderId)}" title="Open order">${esc(o.orderId)}</button></td>
             <td class="muted">${esc(new Date(o.createdAt).toLocaleDateString())}</td>
             <td class="truncate" title="${esc(name)}">${esc(name)}${files > 1 ? ` <span class="muted">+${files - 1}</span>` : ''}</td>
             <td class="truncate">${esc(o.customerInfo?.name || '')}</td>
-            <td class="num">${esc(money(Number(o.amount || 0) * 0.9, 2))}</td>
-            <td>${pill(STATUS_LABEL[o.status] || o.status, statusTone(o.status))}</td>
+            <td class="muted">${esc(fulfilmentLabel(o))}</td>
+            <td class="num">${esc(money(partnerShare(o), 2))}</td>
+            <td>${pill(ORDER_STATUS_LABEL[o.status] || o.status, statusTone(o.status))}</td>
             <td style="width:170px">${action}</td>
           </tr>`;
       })
@@ -142,21 +116,21 @@ function initOrders() {
   search.addEventListener('input', render);
   refreshBtn.addEventListener('click', load);
 
-  tbody.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-open]');
+  tbody.addEventListener('click', async (e) => {
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      const order = orders.find((o) => o.orderId === open.dataset.open);
+      if (order) window.electronAPI.openOrderWindow(order);
+      return;
+    }
+    const btn = e.target.closest('[data-move], [data-book]');
     if (!btn) return;
-    const order = orders.find((o) => o.orderId === btn.dataset.open);
-    if (order) window.electronAPI.openOrderWindow(order);
-  });
-
-  tbody.addEventListener('change', async (e) => {
-    const select = e.target.closest('select.order-status');
-    if (!select || !select.value) return;
-    select.disabled = true;
-    const result = await window.electronAPI.updateOrderStatus(select.dataset.order, select.value);
-    if (!result.ok) await ask({ title: 'Could not update the order', message: result.data.error || `Error ${result.status}`, cancel: null });
-    else toast(`Order ${select.dataset.order} moved to ${STATUS_LABEL[select.value] || select.value}.`);
-    await load();
+    const order = orders.find((o) => o.orderId === (btn.dataset.move || btn.dataset.book));
+    if (!order) return;
+    setBusy(btn, true);
+    const updated = btn.dataset.book ? await bookCourierFor(order) : await moveOrder(order, btn.dataset.status);
+    setBusy(btn, false);
+    if (updated) await load();
   });
 
   return { load };

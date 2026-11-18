@@ -7,19 +7,7 @@
   const params = new URLSearchParams(location.search);
   document.documentElement.classList.add(params.get('platform') || 'platform-other');
 
-  const NEXT = {
-    paid: ['printing', 'printed'],
-    processing: ['printing', 'printed'],
-    printing: ['printed'],
-    printed: ['ready_for_pickup', 'delivered', 'completed'],
-    ready_for_pickup: ['delivered', 'completed'],
-    dispatched: ['delivered', 'completed'],
-    delivered: ['completed'],
-  };
-  const LABEL = {
-    pending_payment: 'Awaiting payment', paid: 'Paid', processing: 'Processing', printing: 'Printing', printed: 'Printed',
-    ready_for_pickup: 'Ready for pickup', dispatched: 'Dispatched', delivered: 'Delivered', completed: 'Completed', cancelled: 'Cancelled', refunded: 'Refunded',
-  };
+  const LABEL = ORDER_STATUS_LABEL;
   const TONE = { completed: 'success', delivered: 'success', ready_for_pickup: 'warning', printed: 'warning', printing: 'info', processing: 'info', cancelled: 'danger', refunded: 'danger' };
 
   let order = null;
@@ -61,7 +49,7 @@
   function render() {
     document.title = `Order ${order.orderId}`;
     $('title').textContent = `Order ${order.orderId}`;
-    $('pills').innerHTML = pill(LABEL[order.status] || order.status, TONE[order.status] || 'neutral') + pill(order.deliveryOption?.type === 'delivery' ? 'Delivery' : 'Pickup');
+    $('pills').innerHTML = pill(LABEL[order.status] || order.status, TONE[order.status] || 'neutral') + pill(fulfilmentLabel(order));
     const o = order.printingOptions || {};
     $('summary').innerHTML = kv([
       ['Placed', order.createdAt ? new Date(order.createdAt).toLocaleString() : ''],
@@ -72,17 +60,32 @@
       ['Copies', o.copies || 1],
       ['Pages', o.pageCount],
       ['Order total', typeof order.amount === 'number' ? money(order.amount, 2) : ''],
-      ['Your share (90%)', typeof order.amount === 'number' ? money(order.amount * 0.9, 2) : ''],
+      ['Your share', typeof order.amount === 'number' ? money(partnerShare(order), 2) : ''],
     ]);
+    const d = order.deliveryOption || {};
+    const how = fulfilmentOf(order);
+    $('delivery').innerHTML = how === 'pickup'
+      ? kv([['How', 'Customer collects from your shop'], ['Delivery point', d.partnerDeliveryPoint]])
+      : kv([
+          ['How', how === 'shop' ? 'You deliver' : 'Courier from your shop'],
+          ['Recipient', [d.recipientName, d.recipientPhone].filter(Boolean).join(' · ')],
+          ['Address', [d.flatBuilding, d.address, d.landmark ? `near ${d.landmark}` : '', d.city, d.state, d.pinCode].filter(Boolean).join(', ')],
+          ['Distance', how === 'shop' && d.distance ? `${d.distance} km` : ''],
+          ['Delivery fee', d.deliveryCharge ? `${money(d.deliveryCharge, 2)}${how === 'shop' ? ' (yours)' : ''}` : ''],
+          ['Courier', order.shiprocket?.awbCode ? `${order.shiprocket.courierName || ''} · AWB ${order.shiprocket.awbCode}` : ''],
+          ['Delivery code', how === 'shop' ? (d.handover?.verified ? 'Accepted' : 'Ask the customer when you hand it over') : ''],
+        ]);
     $('customer').innerHTML = kv([
       ['Name', order.customerInfo?.name || 'Unknown'],
       ['Phone', order.customerInfo?.phone],
       ['Email', order.customerInfo?.email],
     ]);
-    const next = NEXT[order.status] || [];
-    $('status-actions').innerHTML = next.length
-      ? next.map((s, i) => `<button class="btn ${i === 0 ? 'btn-primary' : ''}" data-status="${esc(s)}">${i === 0 ? icon('check', 'icon-sm') : ''}${esc(LABEL[s])}</button>`).join('')
-      : '<p class="muted">Nothing more to do for this order.</p>';
+    const next = nextStatuses(order);
+    $('status-actions').innerHTML = canBookCourier(order)
+      ? `<button class="btn btn-primary" data-book="1">${icon('truck', 'icon-sm')}Book courier pickup</button>`
+      : next.length
+        ? next.map((s, i) => `<button class="btn ${i === 0 ? 'btn-primary' : ''}" data-status="${esc(s)}">${i === 0 ? icon('check', 'icon-sm') : ''}${esc(LABEL[s])}</button>`).join('')
+        : `<p class="muted">${how === 'courier' && order.shiprocket?.awbCode ? 'The courier collects it from your shop. Tracking updates the status.' : 'Nothing more to do for this order.'}</p>`;
     renderPreview();
   }
 
@@ -94,17 +97,14 @@
   });
 
   $('status-actions').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-status]');
+    const b = e.target.closest('[data-status], [data-book]');
     if (!b || !order) return;
     setBusy(b, true);
-    const result = await window.electronAPI.updateOrderStatus(order.orderId, b.dataset.status);
+    const updated = b.dataset.book ? await bookCourierFor(order) : await moveOrder(order, b.dataset.status);
     setBusy(b, false);
-    if (result.ok) {
-      order.status = b.dataset.status;
+    if (updated) {
+      order = { ...order, ...updated };
       render();
-      toast(`Moved to ${LABEL[order.status]}.`);
-    } else {
-      await ask({ title: 'Could not update the order', message: result.data.error || `Error ${result.status}`, cancel: null });
     }
   });
 
