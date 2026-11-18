@@ -139,7 +139,7 @@ function initJobs() {
         ok: 'Decline order',
         cancel: 'Keep order',
         danger: true,
-        input: { label: 'Reason (optional, shown to the customer)', placeholder: 'e.g. Printer out of colour ink' },
+        input: { label: 'Reason (optional, for your records)', placeholder: 'e.g. Printer out of colour ink' },
       });
       if (reason === null) return;
     }
