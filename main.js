@@ -2,39 +2,53 @@
  * main.js — Electron entry point.
  *
  *   src/main/config.js        server addresses (FP_WEB_URL, FP_WSS_URL)
+ *   src/main/prefs.js         user preferences (theme, notifications, printer…)
  *   src/main/session.js       sign-in (code + PKCE), token refresh, API calls
  *   src/main/tokenStore.js    tokens encrypted with the OS keychain
  *   src/main/connection.js    socket to the relay (change notifications only)
  *   src/main/jobSync.js       print jobs from the API -> local print queue
  *   src/main/errorReporter.js errors -> web app error log
  *   src/main/ipcHandlers.js   IPC for the windows
- *   src/main/window.js, orderWindow.js, updater.js
+ *   src/main/window.js, orderWindow.js, updater.js, tray.js
  *   src/queue/                local print queue (one file at a time)
  *   src/printer/              printing
  */
-const { app, BrowserWindow, session: electronSession } = require('electron');
+const { app, BrowserWindow, nativeTheme, session: electronSession } = require('electron');
 const { createWindow, getMainWindow } = require('./src/main/window');
 const errorReporter = require('./src/main/errorReporter');
 
 errorReporter.installGlobalHandlers();
 
+let quitting = false;
+let onNewWindow = () => {};
+
 // One instance only: two would fight over the sign-in port and the print queue
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    const win = getMainWindow();
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
+  const showWindow = () => {
+    let win = getMainWindow();
+    if (!win) {
+      win = createWindow();
+      onNewWindow(win);
     }
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  };
+
+  app.on('second-instance', showWindow);
+  app.on('before-quit', () => {
+    quitting = true;
   });
 
   app.whenReady().then(() => {
+    const prefs = require('./src/main/prefs');
     const session = require('./src/main/session');
     const connection = require('./src/main/connection');
     const jobSync = require('./src/main/jobSync');
     const queue = require('./src/queue/queueManager');
+    const tray = require('./src/main/tray');
     const { initAutoUpdater } = require('./src/main/updater');
     const { registerIpcHandlers } = require('./src/main/ipcHandlers');
 
@@ -44,12 +58,39 @@ if (!app.requestSingleInstanceLock()) {
     });
     electronSession.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'geolocation');
 
-    createWindow();
+    const trayActions = {
+      show: showWindow,
+      isPaused: () => jobSync.snapshot().paused,
+      setPaused: (v) => jobSync.setPaused(v),
+    };
+
+    // ── Preferences that act in the main process ────────────────────
+    const applyPrefs = (p, changed = p) => {
+      if ('theme' in changed) nativeTheme.themeSource = p.theme;
+      if ('openAtLogin' in changed && (process.platform === 'darwin' || process.platform === 'win32') && app.getLoginItemSettings().openAtLogin !== p.openAtLogin) {
+        app.setLoginItemSettings({ openAtLogin: p.openAtLogin });
+      }
+      if ('keepRunningInTray' in changed) (p.keepRunningInTray ? tray.enableTray(trayActions) : tray.disableTray());
+      if ('printerName' in changed) jobSync.setPrinter(p.printerName);
+    };
+
     const send = (channel, data) => {
       const win = getMainWindow();
       if (win && !win.isDestroyed()) win.webContents.send(channel, data);
     };
 
+    const wireWindow = (win) => {
+      // "Keep printing when the window is closed": hide instead of closing
+      win.on('close', (event) => {
+        if (!quitting && prefs.get().keepRunningInTray) {
+          event.preventDefault();
+          win.hide();
+        }
+      });
+    };
+
+    onNewWindow = wireWindow;
+    wireWindow(createWindow());
     errorReporter.setTokenProvider(() => session.getAccessTokenSync());
 
     const goOnline = () => {
@@ -72,7 +113,19 @@ if (!app.requestSingleInstanceLock()) {
       send('signed-out', { reason });
     });
 
-    jobSync.init((snapshot) => send('jobs-changed', snapshot));
+    jobSync.init(
+      (snapshot) => {
+        send('jobs-changed', snapshot);
+        tray.refreshTray(trayActions);
+      },
+      { newOrder: (job) => send('new-order', { jobId: job.jobId, orderId: job.orderId }) }
+    );
+
+    applyPrefs(prefs.get());
+    prefs.events.on('changed', (p, changed) => {
+      applyPrefs(p, changed);
+      send('prefs-changed', p);
+    });
 
     registerIpcHandlers(getMainWindow, { onSignedIn: goOnline });
     initAutoUpdater(getMainWindow, {
@@ -85,7 +138,7 @@ if (!app.requestSingleInstanceLock()) {
     if (session.restore().signedIn) goOnline();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      showWindow();
     });
   });
 

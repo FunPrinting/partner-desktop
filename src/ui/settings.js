@@ -1,313 +1,134 @@
 /**
- * Settings modal — shop profile, pricing, delivery points, map, save
+ * Settings page: account, printer, printing / notification / appearance /
+ * startup options, updates, developer mode and clearing app data.
+ * Options are stored in the main process (src/main/prefs.js).
  */
 
-function initSettings() {
-  const settingsModal = document.getElementById('settings-modal');
+function initSettings({ getPrefs, setPrefs }) {
+  const $ = (id) => document.getElementById(id);
+  const printersList = $('printers-list');
+  let printers = [];
 
-  // ── Dynamic UI Builders ────────────────────────────────────────────
+  // ── Printers ────────────────────────────────────────────────────────
 
-  function addDeliveryPointUI(name = '', lat = '', lng = '', contactNumber = '') {
-    const dpContainer = document.getElementById('dp-container');
-    const div = document.createElement('div');
-    div.className = "flex gap-2 items-start bg-gray-50/50 p-2 rounded border border-gray-200 flex-col sm:flex-row";
-    div.innerHTML = `
-      <div class="flex-1 w-full space-y-2">
-        <input type="text" placeholder="Name (e.g. Campus Gate)" class="dp-name w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
-        <input type="text" placeholder="Contact Number (Optional)" class="dp-contact w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
-        <div class="flex gap-2">
-          <input type="number" step="any" placeholder="Lat" class="dp-lat w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
-          <input type="number" step="any" placeholder="Lng" class="dp-lng w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900">
-        </div>
-      </div>
-      <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
-    `;
-    div.querySelector('.dp-name').value = name;
-    div.querySelector('.dp-contact').value = contactNumber;
-    div.querySelector('.dp-lat').value = lat;
-    div.querySelector('.dp-lng').value = lng;
-    dpContainer.appendChild(div);
+  function statusText(p) {
+    // Electron reports a numeric status on some systems; 0 means ready
+    if (typeof p.status === 'number' && p.status !== 0) return 'May be offline or busy';
+    return p.isDefault ? 'System default' : '';
   }
 
-  function addPhoneUI(phone = '') {
-    const container = document.getElementById('phones-container');
-    const div = document.createElement('div');
-    div.className = "flex gap-2 items-center";
-    div.innerHTML = `
-      <input type="text" placeholder="e.g. +919876543210" class="shop-phone w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-900">
-      <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-700 p-2 shrink-0">✕</button>
-    `;
-    div.querySelector('.shop-phone').value = phone;
-    container.appendChild(div);
-  }
-
-  document.getElementById('add-phone-btn')?.addEventListener('click', () => addPhoneUI());
-  document.getElementById('add-dp-btn')?.addEventListener('click', () => addDeliveryPointUI());
-
-  // ── Open Settings ──────────────────────────────────────────────────
-
-  document.getElementById('open-settings-btn').addEventListener('click', async () => {
-    const session = await window.electronAPI.getSession();
-    if (!session.signedIn) {
-      alert("Please sign in first.");
+  function renderPrinters() {
+    const active = getPrefs().printerName;
+    if (!printers.length) {
+      printersList.innerHTML = `<div class="row"><div class="row-main"><div class="row-title">No printers found</div><div class="row-sub">Connect a printer and add it in your system settings, then click Refresh.</div></div></div>`;
       return;
     }
-
-    document.getElementById('open-settings-btn').innerText = 'Loading...';
-    try {
-      const { ok, data } = await window.electronAPI.api('GET', '/api/partner/profile');
-      if (!ok) throw new Error(data.error || 'Request failed');
-      if (data.success && data.partner) {
-        _populateForm(data.partner, addPhoneUI, addDeliveryPointUI);
-      }
-
-      settingsModal.classList.remove('hidden');
-      _initMap();
-
-    } catch (err) {
-      console.error(err);
-      alert("Failed to load profile data");
-    }
-    document.getElementById('open-settings-btn').innerText = 'Manage Shop Profile';
-  });
-
-  // ── Close Settings ─────────────────────────────────────────────────
-
-  const closeSettings = () => settingsModal.classList.add('hidden');
-  document.getElementById('close-settings-btn').addEventListener('click', closeSettings);
-  document.getElementById('cancel-settings-btn').addEventListener('click', closeSettings);
-
-  // ── Save Settings ──────────────────────────────────────────────────
-
-  document.getElementById('save-settings-btn').addEventListener('click', async () => {
-    const saveBtn = document.getElementById('save-settings-btn');
-
-    const dps = Array.from(document.getElementById('dp-container').children).map(div => ({
-      name: div.querySelector('.dp-name').value,
-      contactNumber: div.querySelector('.dp-contact')?.value || '',
-      location: {
-        type: 'Point',
-        coordinates: [
-          parseFloat(div.querySelector('.dp-lng').value) || 0,
-          parseFloat(div.querySelector('.dp-lat').value) || 0
-        ]
-      }
-    })).filter(dp => dp.name);
-
-    const phoneNumbers = Array.from(document.getElementById('phones-container').children)
-      .map(div => div.querySelector('.shop-phone')?.value.trim())
-      .filter(Boolean);
-
-    const payload = {
-      businessName: document.getElementById('set-business-name').value,
-      location: {
-        type: 'Point',
-        coordinates: [
-          parseFloat(document.getElementById('set-lng').value) || 0,
-          parseFloat(document.getElementById('set-lat').value) || 0
-        ]
-      },
-      address: {
-        street: document.getElementById('set-street').value,
-        city: document.getElementById('set-city').value,
-        state: document.getElementById('set-state').value,
-        zipCode: document.getElementById('set-zip').value
-      },
-      pricing: {
-        perPageBW: parseFloat(document.getElementById('set-price-bw').value) || 2,
-        perPageColor: parseFloat(document.getElementById('set-price-color').value) || 10,
-        binding: parseFloat(document.getElementById('set-price-binding').value) || 40
-      },
-      isOnline: document.getElementById('set-is-online').checked,
-      acceptanceMode: document.getElementById('set-acceptance-mode').value === 'manual' ? 'manual' : 'auto',
-      deliveryPoints: dps,
-      phoneNumbers: phoneNumbers
-    };
-
-    saveBtn.innerText = 'Saving...';
-    saveBtn.disabled = true;
-
-    try {
-      const { data } = await window.electronAPI.api('POST', '/api/partner/profile', payload);
-      if (data.success) {
-        closeSettings();
-        window.electronAPI.syncJobs();
-      } else {
-        alert('Failed to save profile: ' + data.error);
-      }
-    } catch (err) {
-      alert('Failed to connect to server.');
-    }
-    saveBtn.innerText = 'Save Profile';
-    saveBtn.disabled = false;
-  });
-
-  // ── Private Helpers ────────────────────────────────────────────────
-
-  function _populateForm(partner, addPhoneFn, addDPFn) {
-    document.getElementById('set-business-name').value = partner.businessName || '';
-    if (partner.address) {
-      document.getElementById('set-street').value = partner.address.street || '';
-      document.getElementById('set-city').value = partner.address.city || '';
-      document.getElementById('set-state').value = partner.address.state || '';
-      document.getElementById('set-zip').value = partner.address.zipCode || '';
-    }
-    if (partner.location && partner.location.coordinates) {
-      document.getElementById('set-lng').value = partner.location.coordinates[0];
-      document.getElementById('set-lat').value = partner.location.coordinates[1];
-    }
-    if (partner.pricing) {
-      document.getElementById('set-price-bw').value = partner.pricing.perPageBW || 2;
-      document.getElementById('set-price-color').value = partner.pricing.perPageColor || 10;
-      document.getElementById('set-price-binding').value = partner.pricing.binding || 40;
-    }
-    document.getElementById('set-acceptance-mode').value = partner.acceptanceMode === 'manual' ? 'manual' : 'auto';
-    if (partner.isOnline !== undefined) {
-      document.getElementById('set-is-online').checked = partner.isOnline;
-    }
-
-    const phoneContainer = document.getElementById('phones-container');
-    phoneContainer.innerHTML = '';
-    if (partner.phoneNumbers && partner.phoneNumbers.length > 0) {
-      partner.phoneNumbers.forEach(phone => addPhoneFn(phone));
-    }
-
-    const dpContainer = document.getElementById('dp-container');
-    dpContainer.innerHTML = '';
-    if (partner.deliveryPoints) {
-      partner.deliveryPoints.forEach(dp => {
-        addDPFn(dp.name, dp.location.coordinates[1], dp.location.coordinates[0], dp.contactNumber || '');
-      });
-    }
+    printersList.innerHTML = printers
+      .map((p) => {
+        const checked = p.name === active;
+        const sub = statusText(p);
+        return `<button class="printer" role="radio" aria-checked="${checked}" data-printer="${esc(p.name)}">
+          <span class="radio"></span>
+          ${icon('printer')}
+          <span class="row-main"><span class="row-title" style="display:block">${esc(p.displayName || p.name)}</span>${sub ? `<span class="row-sub" style="display:block">${esc(sub)}</span>` : ''}</span>
+          ${checked ? pill('In use', 'primary') : ''}
+        </button>`;
+      })
+      .join('');
   }
 
-  function _initMap() {
-    if (!window.shopMap) {
-      window.shopMap = L.map('shop-map').setView([28.6139, 77.2090], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap',
-        maxZoom: 19
-      }).addTo(window.shopMap);
-
-      window.shopMarker = L.marker([28.6139, 77.2090], { draggable: true }).addTo(window.shopMap);
-
-      window.shopMap.on('click', (e) => {
-        const { lat, lng } = e.latlng;
-        window.shopMarker.setLatLng([lat, lng]);
-        document.getElementById('set-lat').value = lat.toFixed(6);
-        document.getElementById('set-lng').value = lng.toFixed(6);
-      });
-
-      window.shopMarker.on('dragend', () => {
-        const pos = window.shopMarker.getLatLng();
-        document.getElementById('set-lat').value = pos.lat.toFixed(6);
-        document.getElementById('set-lng').value = pos.lng.toFixed(6);
-      });
-
-      const updateMarker = () => {
-        const lat = parseFloat(document.getElementById('set-lat').value);
-        const lng = parseFloat(document.getElementById('set-lng').value);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          window.shopMarker.setLatLng([lat, lng]);
-          window.shopMap.setView([lat, lng]);
-        }
-      };
-      document.getElementById('set-lat').addEventListener('input', updateMarker);
-      document.getElementById('set-lng').addEventListener('input', updateMarker);
-
-      // Map search
-      document.getElementById('map-search-btn').addEventListener('click', async () => {
-        const query = document.getElementById('map-search').value;
-        if (!query) return;
-        const btn = document.getElementById('map-search-btn');
-        btn.innerText = '...';
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-          const data = await res.json();
-          if (data && data.length > 0) {
-            const lat = parseFloat(data[0].lat);
-            const lng = parseFloat(data[0].lon);
-            document.getElementById('set-lat').value = lat.toFixed(6);
-            document.getElementById('set-lng').value = lng.toFixed(6);
-            window.shopMarker.setLatLng([lat, lng]);
-            window.shopMap.setView([lat, lng], 15);
-          } else {
-            alert('Location not found.');
-          }
-        } catch (err) {
-          alert('Search failed.');
-        } finally {
-          btn.innerText = 'Search';
-        }
-      });
-
-      document.getElementById('map-search').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          document.getElementById('map-search-btn').click();
-        }
-      });
-
-      // Locate me
-      document.getElementById('locate-me-btn').addEventListener('click', async () => {
-        const btn = document.getElementById('locate-me-btn');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = 'Locating...';
-
-        const useIPFallback = async () => {
-          try {
-            const response = await fetch('https://ipwho.is/');
-            const data = await response.json();
-            if (data && data.success && data.latitude && data.longitude) {
-              document.getElementById('set-lat').value = data.latitude.toFixed(6);
-              document.getElementById('set-lng').value = data.longitude.toFixed(6);
-              window.shopMarker.setLatLng([data.latitude, data.longitude]);
-              window.shopMap.setView([data.latitude, data.longitude], 15);
-            } else {
-              alert('Could not determine location automatically.');
-            }
-          } catch (err) {
-            alert('Network error while retrieving location.');
-          } finally {
-            btn.innerHTML = originalHTML;
-          }
-        };
-
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const lat = pos.coords.latitude;
-              const lng = pos.coords.longitude;
-              document.getElementById('set-lat').value = lat.toFixed(6);
-              document.getElementById('set-lng').value = lng.toFixed(6);
-              window.shopMarker.setLatLng([lat, lng]);
-              window.shopMap.setView([lat, lng], 16);
-              btn.innerHTML = originalHTML;
-            },
-            (err) => {
-              console.warn("GPS failed, falling back to IP location", err);
-              useIPFallback();
-            },
-            { enableHighAccuracy: true, timeout: 5000 }
-          );
-        } else {
-          useIPFallback();
-        }
-      });
+  async function loadPrinters() {
+    printersList.innerHTML = `<div class="row"><div class="row-main muted">Looking for printers…</div></div>`;
+    try {
+      printers = (await window.electronAPI.getPrinters()) || [];
+    } catch {
+      printers = [];
     }
-
-    // Position map to current saved coordinates
-    const currentLat = parseFloat(document.getElementById('set-lat').value);
-    const currentLng = parseFloat(document.getElementById('set-lng').value);
-
-    setTimeout(() => {
-      window.shopMap.invalidateSize();
-      if (!isNaN(currentLat) && !isNaN(currentLng)) {
-        window.shopMap.setView([currentLat, currentLng], 15);
-        window.shopMarker.setLatLng([currentLat, currentLng]);
-      } else {
-        document.getElementById('locate-me-btn').click();
-      }
-    }, 100);
+    let active = getPrefs().printerName;
+    // From the earlier app version
+    const legacy = localStorage.getItem('activePrinterName');
+    if (!active && legacy) {
+      active = legacy;
+      localStorage.removeItem('activePrinterName');
+    }
+    // The chosen printer was removed: fall back to the system default
+    if (active && !printers.some((p) => p.name === active)) active = null;
+    if (!active) active = (printers.find((p) => p.isDefault) || printers[0] || {}).name || null;
+    if (active !== getPrefs().printerName) await setPrefs({ printerName: active });
+    renderPrinters();
   }
+
+  printersList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-printer]');
+    if (!btn) return;
+    const p = printers.find((x) => x.name === btn.dataset.printer);
+    if (p && typeof p.status === 'number' && p.status !== 0) {
+      const go = await ask({ title: `Use ${p.displayName || p.name}?`, message: 'This printer reports it may be offline, out of paper or busy. Jobs wait and retry until it is ready.', ok: 'Use it' });
+      if (!go) return;
+    }
+    window.electronAPI.setActivePrinter(btn.dataset.printer);
+  });
+  $('refresh-printers-btn').addEventListener('click', loadPrinters);
+
+  // ── Switch options ──────────────────────────────────────────────────
+
+  document.querySelectorAll('[data-pref]').forEach((input) => {
+    input.addEventListener('change', () => setPrefs({ [input.dataset.pref]: input.checked }));
+  });
+
+  $('theme-picker').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-theme]');
+    if (btn) setPrefs({ theme: btn.dataset.theme });
+  });
+
+  $('test-sound-btn').addEventListener('click', playChime);
+
+  // Open at login: macOS and Windows only
+  if (!/platform-(mac|win)/.test(document.documentElement.className)) $('row-login').classList.add('hidden');
+
+  function renderPrefs(p) {
+    document.querySelectorAll('[data-pref]').forEach((input) => {
+      input.checked = Boolean(p[input.dataset.pref]);
+    });
+    $('theme-picker')
+      .querySelectorAll('[data-theme]')
+      .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === p.theme)));
+    renderPrinters();
+  }
+
+  // ── Account and app ─────────────────────────────────────────────────
+
+  $('logout-btn').addEventListener('click', async () => {
+    const ok = await ask({ title: 'Sign this computer out?', message: 'It stops printing your shop\'s orders until you sign in again. A job being printed goes back to your queue.', ok: 'Sign out', danger: true });
+    if (ok) await window.electronAPI.signOut();
+  });
+
+  $('open-devices-btn').addEventListener('click', () => {
+    window.electronAPI.openDashboard();
+  });
+
+  $('check-update-btn').addEventListener('click', () => window.electronAPI.checkUpdates());
+  window.electronAPI.onUpdateMessage((msg) => {
+    $('update-btn-text').textContent = msg;
+  });
+  window.electronAPI.getVersion().then((v) => {
+    $('app-version').textContent = v;
+  });
+
+  $('clear-data-btn').addEventListener('click', async () => {
+    const ok = await ask({
+      title: 'Clear all app data?',
+      message: 'This signs the computer out and empties the local print queue. A job being printed is handed back to your shop\'s queue.',
+      ok: 'Clear data',
+      danger: true,
+    });
+    if (!ok) return;
+    localStorage.clear();
+    const db = getDB();
+    if (db) db.transaction(getStoreName(), 'readwrite').objectStore(getStoreName()).clear();
+    await window.electronAPI.clearData();
+    window.location.reload();
+  });
+
+  return { renderPrefs, loadPrinters };
 }

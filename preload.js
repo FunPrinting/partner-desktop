@@ -37,10 +37,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPrinters: () => ipcRenderer.invoke('printers:list'),
   setActivePrinter: (name) => ipcRenderer.send('printers:set-active', name),
 
+  // Preferences
+  getPrefs: () => ipcRenderer.invoke('prefs:get'),
+  setPrefs: (patch) => ipcRenderer.invoke('prefs:set', patch),
+  onPrefsChanged: (cb) => listen('prefs-changed', cb),
+  onNewOrder: (cb) => listen('new-order', cb),
+
   // Windows, updates, logs, errors
   openOrderWindow: (order) => ipcRenderer.send('open-order-window', order),
   onOrderData: (cb) => listen('order-data', cb),
   checkUpdates: () => ipcRenderer.send('check-updates'),
+  getVersion: () => ipcRenderer.invoke('app:version'),
+  openDashboard: () => ipcRenderer.send('open-dashboard'),
   onUpdateMessage: (cb) => listen('update-message', cb),
   onSystemLog: (cb) => listen('system-log', cb),
   reportError: (report) => ipcRenderer.send('report-error', report),

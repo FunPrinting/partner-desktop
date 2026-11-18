@@ -18,6 +18,36 @@ npm run build                   # Windows + macOS installers (electron-builder)
 
 Server side: FunPrinting-Web `docs/PRINT_JOBS.md` and `docs/PARTNER_AUTH.md`.
 
+## Pages
+
+| Page | Purpose |
+|---|---|
+| **Jobs** | Printing on this computer (with progress), orders to accept (Accept / Decline with an optional reason), waiting jobs, jobs on other devices. Pause / resume and refresh. The sidebar shows how many orders need your OK. |
+| **Orders** | Every order with Open / Done / All, search by order, file or customer, "Move to…" status changes. Click an order to open its window (summary, customer, preview, status buttons, download, Print again here). Works offline from the last saved list. |
+| **Shop** | Earnings, taking orders, acceptance mode, business details, prices, phone numbers, map location (search, my location, drag the pin), delivery points. |
+| **Settings** | Account and sign-out, printer, options below, updates, developer mode (adds a Logs page), clear app data. |
+
+Keyboard: Ctrl/⌘ + 1–4 switch pages.
+
+## Options
+
+Defaults keep the earlier behaviour; the rest are opt-in. Saved in `prefs.json` in the app's data folder.
+
+| Option | Default |
+|---|---|
+| Print an order summary sheet on multi-page orders | On |
+| Mark pickup orders ready after printing | On |
+| Notify me about orders to accept | On |
+| Play a sound for orders to accept | Off |
+| Appearance: System / Light / Dark | System |
+| Open at login (macOS, Windows) | Off |
+| Keep printing when the window is closed (tray / menu bar icon with Pause and Quit) | Off |
+| Developer mode (Logs page) | Off |
+
+## Design
+
+Same design tokens as the mobile app: neutral surfaces, brand indigo on content only, light and dark mode. The sidebar uses the platform material (translucent sidebar on macOS, Mica on Windows 11 22H2+). System fonts (SF Pro, Segoe UI Variable), visible keyboard focus, labelled controls, 34 px+ click targets, reduced motion respected. No CDN: Leaflet is bundled and a Content Security Policy limits what the windows can load.
+
 ## Edge cases handled
 
 | Situation | Behaviour |
@@ -38,6 +68,7 @@ Server side: FunPrinting-Web `docs/PRINT_JOBS.md` and `docs/PARTNER_AUTH.md`.
 |---|---|
 | `main.js` | Entry point; wires the modules below |
 | `src/main/config.js` | Server addresses |
+| `src/main/prefs.js`, `tray.js` | Options; optional tray icon |
 | `src/main/session.js`, `tokenStore.js` | Sign-in, refresh, API calls, token storage |
 | `src/main/connection.js` | Socket to the relay (change notifications only) |
 | `src/main/jobSync.js` | Job API → local print queue, reports, heartbeats |
@@ -45,4 +76,4 @@ Server side: FunPrinting-Web `docs/PRINT_JOBS.md` and `docs/PARTNER_AUTH.md`.
 | `src/main/errorReporter.js` | Error reports |
 | `src/queue/` | Local print queue (saved to `print-queue.json`) |
 | `src/printer/` | Printing (Chrome, SumatraPDF, Windows spooler, `lp` on macOS/Linux; mixed colour) |
-| `src/ui/` | Window scripts |
+| `src/ui/` | Window scripts: `app.js` (shell), `jobs.js`, `orders.js`, `shop.js`, `settings.js`, `orderWindow.js`, `util.js`, `styles.css` |

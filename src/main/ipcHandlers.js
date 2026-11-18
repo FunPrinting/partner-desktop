@@ -12,6 +12,7 @@ const queue = require('../queue/queueManager');
 const { openOrderWindow } = require('./orderWindow');
 const { checkForUpdates } = require('./updater');
 const { reportError } = require('./errorReporter');
+const prefs = require('./prefs');
 
 const API_PATH = /^\/api\/partner\/[A-Za-z0-9/_.?=&%-]*$/;
 const API_METHODS = new Set(['GET', 'POST', 'PATCH']);
@@ -146,9 +147,14 @@ function registerIpcHandlers(getMainWindow, { onSignedIn }) {
   });
 
   on('printers:set-active', (printerName) => {
-    jobSync.setPrinter(typeof printerName === 'string' ? printerName : null);
+    prefs.set({ printerName: typeof printerName === 'string' && printerName ? printerName : null });
     console.log(`🖨️ Active printer: ${printerName}`);
   });
+
+  // ── Preferences ──────────────────────────────────────────────────────
+
+  handle('prefs:get', () => prefs.get());
+  handle('prefs:set', (patch) => prefs.set(patch && typeof patch === 'object' ? patch : {}));
 
   // ── Windows, updates, errors ────────────────────────────────────────
 
@@ -157,6 +163,8 @@ function registerIpcHandlers(getMainWindow, { onSignedIn }) {
   });
 
   on('check-updates', () => checkForUpdates(getMainWindow));
+  handle('app:version', () => require('electron').app.getVersion());
+  on('open-dashboard', () => require('electron').shell.openExternal(`${require('./config').WEB_URL}/partner/dashboard`));
 
   on('report-error', (report) => {
     if (!report || typeof report.message !== 'string') return;

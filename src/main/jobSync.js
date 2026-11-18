@@ -22,6 +22,7 @@ const { app, Notification } = require('electron');
 const session = require('./session');
 const queue = require('../queue/queueManager');
 const { reportError } = require('./errorReporter');
+const prefs = require('./prefs');
 
 const STATE_FILE = path.join(app.getPath('userData'), 'job-state.json');
 const POLL_MS = 60_000;
@@ -54,6 +55,7 @@ let paused = false;
 let printerName = null;
 const notifiedPending = new Set();
 let onChange = () => {};
+let onNewOrder = () => {};
 
 // ── State file ─────────────────────────────────────────────────────────
 
@@ -162,8 +164,8 @@ function queueEntryFor(cur, file, index) {
       // Pages not listed as colour print in B&W
       pageColors: file.color === 'mixed' ? { colorPages: file.colorPages || [], bwPages: [] } : undefined,
     },
-    // The order summary sheet prints once, on top of the last file
-    ...(isLast && cur.summary ? cur.summary : {}),
+    // The order summary sheet prints once, on top of the last file (optional)
+    ...(isLast && cur.summary && prefs.get().printSummarySheet ? cur.summary : {}),
   };
 }
 
@@ -307,7 +309,7 @@ async function flushReports() {
     }
     console.log(`📤 Reported ${pr.jobId} as ${pr.status}`);
     // Same as the earlier app: pickup orders are marked ready once printed
-    if (pr.status === 'printed' && pr.deliveryType === 'pickup' && pr.orderId) {
+    if (pr.status === 'printed' && pr.deliveryType === 'pickup' && pr.orderId && prefs.get().autoReadyForPickup) {
       session
         .apiFetch(`/api/partner/orders/${encodeURIComponent(pr.orderId)}`, { method: 'PATCH', body: { status: 'ready_for_pickup' } })
         .catch(() => undefined);
@@ -370,8 +372,9 @@ function notifyNewPending() {
   for (const j of pending) {
     if (notifiedPending.has(j.jobId)) continue;
     notifiedPending.add(j.jobId);
+    onNewOrder(j);
     try {
-      if (Notification.isSupported()) {
+      if (prefs.get().notifyNewOrders && Notification.isSupported()) {
         new Notification({ title: 'New order to accept', body: `Order ${j.orderId} is waiting for you to accept it.` }).show();
       }
     } catch {
@@ -421,8 +424,9 @@ function sync(reason = 'sync') {
 
 // ── Public API ─────────────────────────────────────────────────────────
 
-function init(listener) {
+function init(listener, { newOrder } = {}) {
   onChange = listener || onChange;
+  if (newOrder) onNewOrder = newOrder;
   loadState();
   queue.init();
   queue.setHooks({ onComplete: onFileComplete, onFailed: onFileFailed });
