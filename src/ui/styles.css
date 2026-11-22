@@ -330,6 +330,191 @@ dialog.modal::backdrop { background: rgb(0 0 0 / 0.35); backdrop-filter: blur(2p
 
 .map { height: 280px; border-radius: var(--r-md); border: 1px solid var(--border); overflow: hidden; }
 
+/* ── Modern Pricing & Service Tiles ─────────────────────────────────── */
+
+.input-addon-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+  height: 36px;
+}
+.input-addon-group:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.input-addon-group .addon {
+  padding: 0 10px;
+  color: var(--text-3);
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--surface-muted);
+  border-right: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+.input-addon-group .addon-suffix {
+  padding: 0 10px;
+  color: var(--text-3);
+  font-size: 12px;
+  background: var(--surface-muted);
+  border-left: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  user-select: none;
+}
+.input-addon-group .input {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  height: 100% !important;
+  padding: 0 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+  width: 100%;
+}
+.input-addon-group .input:focus {
+  outline: none;
+}
+
+.price-matrix-card {
+  padding: 0;
+  overflow: hidden;
+}
+.price-matrix-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-muted);
+}
+.price-matrix-header .title {
+  font-weight: 650;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.price-matrix-body {
+  padding: 14px 18px 16px;
+}
+.rate-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+.rate-table th {
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  padding: 0 8px 4px;
+  text-align: left;
+}
+.rate-table td {
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+.rate-table tr td:first-child {
+  padding-left: 0;
+  width: 130px;
+}
+.rate-table tr td:last-child {
+  padding-right: 0;
+}
+.rate-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.service-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  transition: opacity 0.2s, border-color 0.15s;
+}
+.service-tile.dimmed {
+  opacity: 0.6;
+}
+.service-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.service-tile-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.service-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.service-title {
+  font-weight: 650;
+  font-size: 13.5px;
+}
+.service-desc {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+.service-body {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.chip-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chip input {
+  margin: 0;
+}
+.chip:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

@@ -163,111 +163,435 @@
               </div>
             </div>
 
+            <!-- Printing Service Specs -->
             <div class="section">
-              <div class="section-head"><span class="section-title">Printing service</span></div>
-              <div class="card card-pad">
-                <label class="checkbox"><input type="checkbox" id="set-printing-enabled"><span>Enable printing service</span></label>
-                <div class="grid-2" style="margin-top:12px">
-                  <div class="field"><label for="set-max-paper-size">Maximum paper size</label>
-                    <select class="input" id="set-max-paper-size">
-                      <option value="a4">A4 (and smaller)</option>
-                      <option value="a3">A3 (can also print A4, Letter, Legal)</option>
-                      <option value="letter">Letter</option>
-                      <option value="legal">Legal</option>
-                    </select>
+              <div class="section-head"><span class="section-title">Printing Service</span></div>
+              <div class="service-tile">
+                <div class="service-tile-head">
+                  <div class="service-tile-info">
+                    <div class="service-icon-box"><svg class="icon"><use href="#i-printer"/></svg></div>
+                    <div>
+                      <div class="service-title">Document Printing</div>
+                      <div class="service-desc">Accept PDF & document print jobs from nearby customers</div>
+                    </div>
                   </div>
-                  <div style="display:flex;flex-direction:column;gap:8px">
-                    <label class="checkbox"><input type="checkbox" id="set-supports-color"><span>Supports colour printing</span></label>
-                    <label class="checkbox"><input type="checkbox" id="set-supports-bw"><span>Supports B&amp;W printing</span></label>
-                    <label class="checkbox"><input type="checkbox" id="set-supports-duplex"><span>Supports double-sided</span></label>
+                  <label class="switch"><input type="checkbox" id="set-printing-enabled"><span aria-hidden="true"></span></label>
+                </div>
+                <div class="service-body">
+                  <div class="grid-2">
+                    <div class="field">
+                      <label for="set-max-paper-size">Maximum Supported Paper Size</label>
+                      <select class="input" id="set-max-paper-size">
+                        <option value="a4">A4 standard (and smaller)</option>
+                        <option value="a3">A3 large format (also handles A4, Letter, Legal)</option>
+                        <option value="letter">US Letter</option>
+                        <option value="legal">US Legal</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Supported Modes</label>
+                      <div class="chip-group">
+                        <label class="chip"><input type="checkbox" id="set-supports-bw"><span>B&amp;W (Mono)</span></label>
+                        <label class="chip"><input type="checkbox" id="set-supports-color"><span>Full Colour</span></label>
+                        <label class="chip"><input type="checkbox" id="set-supports-duplex"><span>Double-Sided</span></label>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="section-foot">Configure your printer capabilities. An A3 printer can also print A4 and smaller sizes.</div>
             </div>
 
+            <!-- Per-Page Printing Prices -->
             <div class="section">
-              <div class="section-head"><span class="section-title">Printing prices (₹)</span></div>
-              <div class="card card-pad">
-                <div style="margin-bottom:12px"><strong>A4 size</strong></div>
-                <div class="grid-4" style="margin-bottom:16px">
-                  <div class="field"><label for="set-price-a4-bw-single">B&amp;W single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-single"></div>
-                  <div class="field"><label for="set-price-a4-bw-double">B&amp;W duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-double"></div>
-                  <div class="field"><label for="set-price-a4-color-single">Color single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-single"></div>
-                  <div class="field"><label for="set-price-a4-color-double">Color duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-double"></div>
+              <div class="section-head">
+                <span class="section-title">Printing Prices (₹ per page)</span>
+                <span class="pill tone-bg-neutral small">Base Rates</span>
+              </div>
+              
+              <div class="grid-2">
+                <!-- A4 Size Rates -->
+                <div class="card price-matrix-card" id="card-price-a4">
+                  <div class="price-matrix-header">
+                    <div class="title"><span class="pill tone-bg-primary">A4</span> Standard Document</div>
+                    <span class="muted small">210 × 297 mm</span>
+                  </div>
+                  <div class="price-matrix-body">
+                    <table class="rate-table">
+                      <thead>
+                        <tr>
+                          <th>Print Mode</th>
+                          <th>Single-Sided</th>
+                          <th class="col-duplex">Double-Sided</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="row-bw">
+                          <td>
+                            <div class="rate-mode">
+                              <span class="dot" style="background:#52525b"></span> B&amp;W
+                            </div>
+                          </td>
+                          <td>
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-single" placeholder="2">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                          <td class="col-duplex">
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-double" placeholder="3">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr class="row-color">
+                          <td>
+                            <div class="rate-mode">
+                              <span class="dot" style="background:#4f46e5"></span> Colour
+                            </div>
+                          </td>
+                          <td>
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-single" placeholder="5">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                          <td class="col-duplex">
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-double" placeholder="8">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div style="margin-bottom:12px"><strong>A3 size</strong></div>
-                <div class="grid-4">
-                  <div class="field"><label for="set-price-a3-bw-single">B&amp;W single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-single"></div>
-                  <div class="field"><label for="set-price-a3-bw-double">B&amp;W duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-double"></div>
-                  <div class="field"><label for="set-price-a3-color-single">Color single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-single"></div>
-                  <div class="field"><label for="set-price-a3-color-double">Color duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-double"></div>
+
+                <!-- A3 Size Rates -->
+                <div class="card price-matrix-card" id="card-price-a3">
+                  <div class="price-matrix-header">
+                    <div class="title"><span class="pill tone-bg-info">A3</span> Large Format / Poster</div>
+                    <span class="muted small">297 × 420 mm</span>
+                  </div>
+                  <div class="price-matrix-body">
+                    <table class="rate-table">
+                      <thead>
+                        <tr>
+                          <th>Print Mode</th>
+                          <th>Single-Sided</th>
+                          <th class="col-duplex">Double-Sided</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="row-bw">
+                          <td>
+                            <div class="rate-mode">
+                              <span class="dot" style="background:#52525b"></span> B&amp;W
+                            </div>
+                          </td>
+                          <td>
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-single" placeholder="4">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                          <td class="col-duplex">
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-double" placeholder="6">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr class="row-color">
+                          <td>
+                            <div class="rate-mode">
+                              <span class="dot" style="background:#4f46e5"></span> Colour
+                            </div>
+                          </td>
+                          <td>
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-single" placeholder="10">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                          <td class="col-duplex">
+                            <div class="input-addon-group">
+                              <span class="addon">₹</span>
+                              <input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-double" placeholder="15">
+                              <span class="addon-suffix">/p</span>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
               <div class="section-foot">Per-page prices. Customers pay these plus a 3% processing fee.</div>
             </div>
 
+            <!-- Binding Service -->
             <div class="section">
-              <div class="section-head"><span class="section-title">Binding service</span></div>
-              <div class="card card-pad">
-                <label class="checkbox"><input type="checkbox" id="set-binding-enabled"><span>Enable binding service</span></label>
-                <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
-                  <label class="checkbox"><input type="checkbox" id="set-binding-spiral"><span>Spiral binding</span></label>
-                  <label class="checkbox"><input type="checkbox" id="set-binding-perfect"><span>Perfect binding</span></label>
-                  <label class="checkbox"><input type="checkbox" id="set-binding-staple"><span>Staple binding</span></label>
+              <div class="section-head"><span class="section-title">Binding &amp; Finishing</span></div>
+              <div class="service-tile" id="binding-service-tile">
+                <div class="service-tile-head">
+                  <div class="service-tile-info">
+                    <div class="service-icon-box"><svg class="icon"><use href="#i-list"/></svg></div>
+                    <div>
+                      <div class="service-title">Document Binding Service</div>
+                      <div class="service-desc">Charged per bound booklet / document, not per page</div>
+                    </div>
+                  </div>
+                  <label class="switch"><input type="checkbox" id="set-binding-enabled"><span aria-hidden="true"></span></label>
                 </div>
-                <div class="grid-3" style="margin-top:12px">
-                  <div class="field"><label for="set-price-binding-spiral">Spiral (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-spiral"></div>
-                  <div class="field"><label for="set-price-binding-perfect">Perfect (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-perfect"></div>
-                  <div class="field"><label for="set-price-binding-staple">Staple (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-staple"></div>
+                <div class="service-body" id="binding-options-body">
+                  <div class="grid-3">
+                    <div class="card card-pad" style="gap:8px">
+                      <label class="checkbox"><input type="checkbox" id="set-binding-spiral"><strong>Spiral Binding</strong></label>
+                      <span class="muted small">Flexible plastic/wire coil</span>
+                      <div class="input-addon-group" id="wrap-binding-spiral" style="margin-top:4px">
+                        <span class="addon">₹</span>
+                        <input class="input" type="number" min="0" step="1" id="set-price-binding-spiral" placeholder="30">
+                        <span class="addon-suffix">/ doc</span>
+                      </div>
+                    </div>
+
+                    <div class="card card-pad" style="gap:8px">
+                      <label class="checkbox"><input type="checkbox" id="set-binding-perfect"><strong>Perfect Binding</strong></label>
+                      <span class="muted small">Glued spine, book finish</span>
+                      <div class="input-addon-group" id="wrap-binding-perfect" style="margin-top:4px">
+                        <span class="addon">₹</span>
+                        <input class="input" type="number" min="0" step="1" id="set-price-binding-perfect" placeholder="50">
+                        <span class="addon-suffix">/ doc</span>
+                      </div>
+                    </div>
+
+                    <div class="card card-pad" style="gap:8px">
+                      <label class="checkbox"><input type="checkbox" id="set-binding-staple"><strong>Corner Stapling</strong></label>
+                      <span class="muted small">Heavy-duty corner/side staple</span>
+                      <div class="input-addon-group" id="wrap-binding-staple" style="margin-top:4px">
+                        <span class="addon">₹</span>
+                        <input class="input" type="number" min="0" step="1" id="set-price-binding-staple" placeholder="10">
+                        <span class="addon-suffix">/ doc</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="section-foot">Price per order (not per page). Enable the types you offer.</div>
             </div>
 
+            <!-- Value-Added Services -->
             <div class="section">
-              <div class="section-head"><span class="section-title">Other services</span></div>
-              <div class="card card-pad">
-                <div style="display:flex;flex-direction:column;gap:12px">
-                  <div>
-                    <label class="checkbox"><input type="checkbox" id="set-lamination-enabled"><span>Lamination</span></label>
-                    <div class="grid-3" style="margin-top:8px;margin-left:24px">
-                      <div class="field"><label for="set-lamination-max-size">Max size</label>
-                        <select class="input" id="set-lamination-max-size">
-                          <option value="a4">A4</option>
-                          <option value="a3">A3 (also does A4)</option>
-                        </select>
+              <div class="section-head"><span class="section-title">Value-Added Services</span></div>
+              <div class="grid-2">
+                <!-- Lamination -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box" style="background:var(--success-soft);color:var(--success)"><svg class="icon"><use href="#i-check"/></svg></div>
+                      <div>
+                        <div class="service-title">Thermal Lamination</div>
+                        <div class="service-desc">Protective film coating for documents</div>
                       </div>
-                      <div class="field"><label for="set-price-lamination-a4">A4 price (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-lamination-a4"></div>
-                      <div class="field"><label for="set-price-lamination-a3">A3 price (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-lamination-a3"></div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="set-lamination-enabled"><span aria-hidden="true"></span></label>
+                  </div>
+                  <div class="service-body" id="lamination-body">
+                    <div class="field" style="margin-bottom:10px">
+                      <label for="set-lamination-max-size">Max Supported Size</label>
+                      <select class="input input-sm" id="set-lamination-max-size">
+                        <option value="a4">A4 standard</option>
+                        <option value="a3">A3 (also does A4)</option>
+                      </select>
+                    </div>
+                    <div class="grid-2">
+                      <div class="field" id="wrap-lamination-a4">
+                        <label for="set-price-lamination-a4">A4 Sheet</label>
+                        <div class="input-addon-group">
+                          <span class="addon">₹</span>
+                          <input class="input" type="number" min="0" step="1" id="set-price-lamination-a4" placeholder="20">
+                          <span class="addon-suffix">/ sheet</span>
+                        </div>
+                      </div>
+                      <div class="field" id="wrap-lamination-a3">
+                        <label for="set-price-lamination-a3">A3 Sheet</label>
+                        <div class="input-addon-group">
+                          <span class="addon">₹</span>
+                          <input class="input" type="number" min="0" step="1" id="set-price-lamination-a3" placeholder="40">
+                          <span class="addon-suffix">/ sheet</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label class="checkbox"><input type="checkbox" id="set-scanning-enabled"><span>Scanning</span></label>
-                    <div class="field" style="margin-top:8px;margin-left:24px;max-width:200px">
-                      <label for="set-price-scanning">Price per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-scanning">
+                </div>
+
+                <!-- Scanning -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box" style="background:var(--info-soft);color:var(--info)"><svg class="icon"><use href="#i-download"/></svg></div>
+                      <div>
+                        <div class="service-title">Digital Scanning</div>
+                        <div class="service-desc">High-resolution OCR scan to PDF / JPEG</div>
+                      </div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="set-scanning-enabled"><span aria-hidden="true"></span></label>
+                  </div>
+                  <div class="service-body" id="scanning-body">
+                    <div class="field">
+                      <label for="set-price-scanning">Scanning Rate</label>
+                      <div class="input-addon-group">
+                        <span class="addon">₹</span>
+                        <input class="input" type="number" min="0" step="0.5" id="set-price-scanning" placeholder="5">
+                        <span class="addon-suffix">/ page</span>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label class="checkbox"><input type="checkbox" id="set-photocopying-enabled"><span>Photocopying</span></label>
-                    <div class="grid-3" style="margin-top:8px;margin-left:24px">
-                      <label class="checkbox"><input type="checkbox" id="set-photocopying-color"><span>Color available</span></label>
-                      <div class="field"><label for="set-price-photocopying-bw">B&amp;W per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-bw"></div>
-                      <div class="field"><label for="set-price-photocopying-color">Color per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-color"></div>
+                </div>
+
+                <!-- Photocopying -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box"><svg class="icon"><use href="#i-refresh"/></svg></div>
+                      <div>
+                        <div class="service-title">Photocopying &amp; Duplication</div>
+                        <div class="service-desc">Direct copy service from physical originals</div>
+                      </div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="set-photocopying-enabled"><span aria-hidden="true"></span></label>
+                  </div>
+                  <div class="service-body" id="photocopying-body">
+                    <label class="chip" style="margin-bottom:10px"><input type="checkbox" id="set-photocopying-color"><span>Enable Colour Copies</span></label>
+                    <div class="grid-2">
+                      <div class="field">
+                        <label for="set-price-photocopying-bw">B&amp;W Copy</label>
+                        <div class="input-addon-group">
+                          <span class="addon">₹</span>
+                          <input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-bw" placeholder="2">
+                          <span class="addon-suffix">/ page</span>
+                        </div>
+                      </div>
+                      <div class="field" id="wrap-photocopying-color">
+                        <label for="set-price-photocopying-color">Colour Copy</label>
+                        <div class="input-addon-group">
+                          <span class="addon">₹</span>
+                          <input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-color" placeholder="10">
+                          <span class="addon-suffix">/ page</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label class="checkbox"><input type="checkbox" id="set-plastic-files-enabled"><span>Plastic files</span></label>
-                    <div class="field" style="margin-top:8px;margin-left:24px;max-width:200px">
-                      <label for="set-price-plastic-files">Price per item (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-plastic-files">
+                </div>
+
+                <!-- Plastic Files -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box" style="background:var(--warning-soft);color:var(--warning)"><svg class="icon"><use href="#i-inbox"/></svg></div>
+                      <div>
+                        <div class="service-title">Plastic Folders &amp; Files</div>
+                        <div class="service-desc">Clear document sleeve / strip folder packaging</div>
+                      </div>
                     </div>
+                    <label class="switch"><input type="checkbox" id="set-plastic-files-enabled"><span aria-hidden="true"></span></label>
                   </div>
-                  <div>
-                    <label class="checkbox"><input type="checkbox" id="set-delivery-enabled"><span>Delivery</span></label>
+                  <div class="service-body" id="plastic-files-body">
+                    <div class="field">
+                      <label for="set-price-plastic-files">Folder Price</label>
+                      <div class="input-addon-group">
+                        <span class="addon">₹</span>
+                        <input class="input" type="number" min="0" step="1" id="set-price-plastic-files" placeholder="10">
+                        <span class="addon-suffix">/ folder</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="section-foot">Additional services your shop provides. Check to enable.</div>
+              <div class="section-foot">Additional services your shop provides. Toggle switches to enable or disable.</div>
+            </div>
+
+            <!-- Delivery & Fulfillment (Modern Industry Standards) -->
+            <div class="section">
+              <div class="section-head">
+                <span class="section-title">Delivery &amp; Fulfillment</span>
+                <span class="pill tone-bg-success small">Multi-Channel</span>
+              </div>
+              
+              <div class="grid-2">
+                <!-- Shop Direct Rider Delivery -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box" style="background:var(--primary-soft);color:var(--primary)"><svg class="icon"><use href="#i-truck"/></svg></div>
+                      <div>
+                        <div class="service-title">Local Direct Delivery</div>
+                        <div class="service-desc">Delivered directly by your own shop staff or rider</div>
+                      </div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="set-delivery-self-enabled"><span aria-hidden="true"></span></label>
+                  </div>
+                  <div class="service-body" id="delivery-self-body">
+                    <div class="grid-3">
+                      <div class="field">
+                        <label for="set-delivery-radius">Max Radius</label>
+                        <div class="input-addon-group">
+                          <input class="input" type="number" min="0.5" max="25" step="0.5" id="set-delivery-radius" placeholder="3">
+                          <span class="addon-suffix">km</span>
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label for="set-delivery-fee">Delivery Fee</label>
+                        <div class="input-addon-group">
+                          <span class="addon">₹</span>
+                          <input class="input" type="number" min="0" max="1000" step="5" id="set-delivery-fee" placeholder="30">
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label for="set-delivery-eta">Typical Time</label>
+                        <div class="input-addon-group">
+                          <input class="input" type="number" min="15" max="1440" step="15" id="set-delivery-eta" placeholder="120">
+                          <span class="addon-suffix">min</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p class="hint" style="margin-top:8px">100% of your local delivery fee is paid directly to your shop earnings.</p>
+                  </div>
+                </div>
+
+                <!-- Courier Doorstep Collection -->
+                <div class="service-tile">
+                  <div class="service-tile-head">
+                    <div class="service-tile-info">
+                      <div class="service-icon-box" style="background:var(--info-soft);color:var(--info)"><svg class="icon"><use href="#i-external"/></svg></div>
+                      <div>
+                        <div class="service-title">Automated Courier (Shiprocket)</div>
+                        <div class="service-desc">Nationwide parcel shipping with auto-courier pickup</div>
+                      </div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="set-delivery-courier-enabled"><span aria-hidden="true"></span></label>
+                  </div>
+                  <div class="service-body" id="delivery-courier-body">
+                    <p class="hint" style="margin:0 0 10px">When an order is completed, press "Book courier" to schedule an automatic doorstep parcel collection by BlueDart, Delhivery, or DTDC.</p>
+                    <div class="banner banner-sm" style="background:var(--surface-muted);padding:8px 12px;border-radius:var(--r-md)">
+                      <svg class="icon icon-sm" style="color:var(--info)"><use href="#i-info"/></svg>
+                      <span class="small" id="courier-status-text">Pickups dispatched from your shop's registered street address.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Hidden compatibility field for legacy toggle -->
+              <input type="checkbox" id="set-delivery-enabled" class="hidden">
+              <div class="section-foot">Customers choose their preferred delivery or pickup method during checkout.</div>
             </div>
 
             <div class="section">
