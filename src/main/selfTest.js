@@ -25,6 +25,11 @@ async function runSelfTest(app) {
       }
     }
     if (typeof engine.checkPrinting === 'function') report.printing = engine.checkPrinting();
+    // Can this app reach each network printer? (macOS Local Network permission, firewalls)
+    const { createReach } = require('../print/discovery/reach');
+    const reach = createReach();
+    report.reach = {};
+    for (const p of printers) report.reach[p.name] = await reach(p).catch((err) => ({ error: err.message }));
     const { browse } = require('../print/discovery/browse');
     const found = await browse({ timeoutMs: 2500 });
     report.network = { found: found.devices.map((d) => d.name), error: found.error, stats: found.stats };

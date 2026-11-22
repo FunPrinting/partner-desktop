@@ -57,7 +57,16 @@
         "zip"
       ],
       "icon": "build/icons/icon.icns",
-      "identity": null
+      "identity": null,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "FunPrinting Partner finds printers on your network and checks they are ready, so your shop's orders print on them.",
+        "NSBonjourServices": [
+          "_ipp._tcp",
+          "_ipps._tcp",
+          "_pdl-datastream._tcp",
+          "_printer._tcp"
+        ]
+      }
     },
     "files": [
       "**/*",

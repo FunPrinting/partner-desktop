@@ -54,38 +54,87 @@ function initSettings({ getPrefs, setPrefs }) {
 
   const foundList = $('found-list');
   let found = [];
+  let scanStats = null;
+  let networkBlocked = false;
   let moves = [];
   let scanning = false;
   let addingId = null;
   const addErrors = {};
 
-  function renderFound() {
-    $('scan-printers-btn').disabled = scanning;
-    if (!found.length) {
-      foundList.innerHTML = `<div class="row"><div class="row-main"><div class="row-title">${scanning ? 'Searching…' : 'No new printers found'}</div></div></div>`;
-      return;
-    }
-    foundList.innerHTML = found
-      .map((f) => {
-        const c = f.caps;
-        const abilities = c ? [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided'), (c.media || []).includes('A3') ? pill('A3') : ''].join(' ') : '';
-        const sub = !f.reachable ? (f.status && f.status.message) || 'Not answering' : f.estimated ? 'Abilities are estimated from what the printer announced. Print a test page after adding it.' : f.address ? `Wi-Fi · ${f.address}` : 'Wi-Fi';
-        const busy = addingId === f.id;
-        return `<div class="row">
-          ${icon('printer')}
-          <div class="row-main"><div class="row-title">${esc(f.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${abilities}</div>${addErrors[f.id] ? `<div class="row-sub" style="color:var(--danger,#c0392b)">${esc(addErrors[f.id])}</div>` : ''}</div>
-          <button class="btn btn-primary" data-add="${esc(f.id)}" ${busy || addingId ? 'disabled' : ''}>${busy ? 'Adding…' : 'Add'}</button>
-        </div>`;
-      })
-      .join('');
+  const platform = /platform-win/.test(document.documentElement.className) ? 'win' : /platform-mac/.test(document.documentElement.className) ? 'mac' : 'linux';
+
+  /** One line saying what the last search did, so "nothing found" is never a mystery. */
+  function searchSummary(stats) {
+    if (!stats) return '';
+    const nets = (stats.adapters || []).length;
+    const parts = [`Searched ${nets} network${nets === 1 ? '' : 's'}`];
+    parts.push(`${stats.mdnsFound || 0} printer${stats.mdnsFound === 1 ? '' : 's'} announced`);
+    if (stats.swept) parts.push(`${(stats.swept.open || []).length} device(s) answered on the printing port`);
+    return parts.join(' · ');
   }
 
+  function nothingFoundHelp() {
+    if (platform === 'win') return 'Check the printer is on and on the same network. In Windows Settings → Network, set this Wi-Fi to Private. If Windows asked whether to allow FunPrinting on networks, allow it.';
+    if (platform === 'mac') return 'Check the printer is on and on the same Wi-Fi. In System Settings → Privacy & Security → Local Network, switch FunPrinting Partner on.';
+    return 'Check the printer is on and on the same network, and that a firewall is not blocking port 5353 (mDNS).';
+  }
+
+  function renderFound() {
+    $('scan-printers-btn').disabled = scanning;
+    const stats = scanStats;
+    const summary = searchSummary(stats);
+    const blockedBanner = networkBlocked
+      ? `<div class="row"><div class="row-main">${banner(
+          'warning',
+          'This computer is not letting the app check printers on the network',
+          platform === 'mac'
+            ? 'Open System Settings → Privacy & Security → Local Network and switch FunPrinting Partner on. Printing still works; the app just cannot tell whether a Wi-Fi printer is switched off.'
+            : 'A firewall is blocking the app. Allow FunPrinting Partner on private networks. Printing still works.'
+        )}</div></div>`
+      : '';
+    if (!found.length) {
+      foundList.innerHTML =
+        blockedBanner +
+        (scanning
+          ? `<div class="row"><div class="row-main"><div class="row-title">Searching…</div><div class="row-sub">Asking printers on your network. This takes a few seconds.</div></div></div>`
+          : `<div class="row"><div class="row-main"><div class="row-title">No printers found on the network</div>${summary ? `<div class="row-sub">${esc(summary)}</div>` : ''}<div class="row-sub">${esc(nothingFoundHelp())}</div></div></div>`);
+      return;
+    }
+    // Printers not set up yet first; ones already set up are shown so a search never looks empty
+    const ordered = [...found].sort((a, b) => Number(Boolean(a.setUpAs)) - Number(Boolean(b.setUpAs)));
+    foundList.innerHTML =
+      blockedBanner +
+      ordered
+        .map((f) => {
+          const c = f.caps;
+          const abilities = c ? [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided'), (c.media || []).includes('A3') ? pill('A3') : ''].join(' ') : '';
+          const where = f.address ? `Network · ${f.address}` : 'Network';
+          const sub = f.setUpAs
+            ? `Already set up on this computer as "${f.setUpAs}" · ${where}`
+            : !f.reachable
+              ? (f.status && f.status.message) || 'Not answering'
+              : f.estimated
+                ? 'Abilities are estimated from what the printer announced. Print a test page after adding it.'
+                : where;
+          const busy = addingId === f.id;
+          const action = f.setUpAs ? pill('Set up', 'success') : `<button class="btn btn-primary" data-add="${esc(f.id)}" ${busy || addingId ? 'disabled' : ''}>${busy ? 'Adding…' : 'Add'}</button>`;
+          return `<div class="row">
+          ${icon('printer')}
+          <div class="row-main"><div class="row-title">${esc(f.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${abilities}</div>${addErrors[f.id] ? `<div class="row-sub" style="color:var(--danger,#c0392b)">${esc(addErrors[f.id])}</div>` : ''}</div>
+          ${action}
+        </div>`;
+        })
+        .join('') +
+      (summary ? `<div class="row"><div class="row-main"><div class="row-sub">${esc(summary)}</div></div></div>` : '');
+  }
   function setPrinters(snap) {
     printers = (snap && snap.printers) || [];
     lastError = (snap && snap.lastError) || null;
     found = (snap && snap.available) || [];
     moves = (snap && snap.moves) || [];
     scanning = Boolean(snap && snap.scan && snap.scan.scanning);
+    scanStats = (snap && snap.scan && snap.scan.stats) || null;
+    networkBlocked = Boolean(snap && snap.networkBlocked);
     renderPrinters();
     renderFound();
   }
