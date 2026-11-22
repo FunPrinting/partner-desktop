@@ -104,10 +104,11 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
     const found = finder.device(foundId);
     if (!found) throw new Error('That printer was not found. Search again.');
     if (typeof engine.addPrinter !== 'function') throw new Error('Adding printers is not supported on this computer.');
-    const { name } = await engine.addPrinter(found);
+    const { name, via } = await engine.addPrinter(found);
     await registry.refresh();
     const added = registry.snapshot().printers.find((p) => p.name === name);
     if (!added) return { name, id: null, enabled: false };
+    registry.setSource(added.id, found.id, via);
     if (found.probe.estimated || !found.probe.reachable) registry.setNeedsTest(added.id, true);
     else registry.update(added.id, { enabled: true });
     finder.scan().catch(() => undefined); // the found list drops it

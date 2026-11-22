@@ -64,8 +64,12 @@ function sameHost(a, b) {
   return x.replace(/\.local$/, '') === y.replace(/\.local$/, '') && !net.isIP(x);
 }
 
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
 /** True if this OS printer is the found device. */
 function isSame(printer, device) {
+  // We set this queue up from this device ourselves
+  if (printer.source && (printer.source === device.id || printer.source === device.uuid)) return true;
   const w = whereIs(printer.uri);
   const printerUuid = stripUuid(printer.uuid) || (/^urn:uuid:/i.test(printer.id) ? stripUuid(printer.id) : '');
   if (device.uuid && (device.uuid === printerUuid || device.uuid === w.uuid)) return true;
@@ -73,6 +77,13 @@ function isSame(printer, device) {
   if (w.host) {
     if (sameHost(w.host, device.host)) return true;
     if (device.addresses.some((a) => a.toLowerCase() === w.host)) return true;
+  }
+  // Windows connects many network printers on a WSD port, which names no address.
+  // For those, the same name (or model) is the best evidence there is.
+  if (/^WSD-/i.test(String(printer.uri || ''))) {
+    const names = [printer.name, printer.displayName].map(norm).filter(Boolean);
+    const theirs = [device.name, device.model, device.serviceName].map(norm).filter(Boolean);
+    if (names.some((n) => theirs.includes(n))) return true;
   }
   return false;
 }

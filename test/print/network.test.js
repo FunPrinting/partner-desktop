@@ -33,6 +33,17 @@ test('a queue is the same printer by uuid, by address or by host name', () => {
   assert.equal(isSame({ id: 'q', uri: 'IP_192.168.1.9' }, device()), true);
 });
 
+test('a queue we set up from the device is remembered, even on a WSD port', () => {
+  assert.equal(isSame({ id: 'WSD-1|IPP', uri: 'WSD-1', source: `uuid:${UUID}` }, device({ id: `uuid:${UUID}` })), true);
+});
+
+test('a WSD port is matched by name only', () => {
+  assert.equal(isSame({ id: 'p', name: 'EPSON L3250 Series', uri: 'WSD-abc' }, device({ name: 'EPSON L3250 Series', model: 'L3250 Series' })), true);
+  assert.equal(isSame({ id: 'p', name: 'Office HP', uri: 'WSD-abc' }, device({ name: 'EPSON L3250 Series' })), false);
+  // a USB printer with the same name is a different thing
+  assert.equal(isSame({ id: 'p', name: 'EPSON L3250 Series', uri: 'USB001' }, device({ uuid: undefined, host: undefined, addresses: [], name: 'EPSON L3250 Series' })), false);
+});
+
 test('a different address or no connection info is not a match', () => {
   assert.equal(isSame({ id: 'q', uri: 'ipp://192.168.1.11:631/ipp/print' }, device()), false);
   assert.equal(isSame({ id: 'q', uri: 'usb://EPSON/L3250' }, device({ uuid: undefined })), false);

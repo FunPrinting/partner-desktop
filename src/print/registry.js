@@ -38,6 +38,8 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
         enabled: Boolean(s[p.id]?.enabled),
         preferredBw: Boolean(s[p.id]?.preferredBw),
         needsTest: Boolean(s[p.id]?.needsTest),
+        source: s[p.id]?.source,
+        sourceUrl: s[p.id]?.sourceUrl,
       })),
       available,
       scan: scanState,
@@ -144,6 +146,15 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     timer = null;
   }
 
+  /** Remember which found network device (and URL) a queue was set up from. */
+  function setSource(id, source, sourceUrl) {
+    const p = printers.get(id);
+    if (!p) return;
+    const s = settings();
+    s[id] = { ...(s[id] || {}), name: p.name, source, sourceUrl };
+    saveSettings(s);
+    events.emit('changed', snapshot());
+  }
   /** A printer whose properties are only estimated stays off until a test page has printed. */
   function setNeedsTest(id, value) {
     const p = printers.get(id);
@@ -163,7 +174,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   function setScanError(error) {
     scanState = { ...scanState, error };
   }
-  return { setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  return { setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
 module.exports = { createRegistry };
