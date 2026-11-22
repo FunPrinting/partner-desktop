@@ -10,7 +10,8 @@
     "build:native": "node scripts/build-native.js",
     "test:native": "cargo test --manifest-path native/fp-print/Cargo.toml --lib",
     "smoke:print": "node scripts/smoke-print.js",
-    "discover": "node scripts/discover.js"
+    "discover": "node scripts/discover.js",
+    "smoke:add": "node scripts/smoke-add.js"
   },
   "keywords": [],
   "author": "",

@@ -26,3 +26,6 @@ jobs:
       - name: Print a test document through the Windows engine
         if: matrix.os == 'windows-latest'
         run: npm run smoke:print
+      - name: Add a network printer through the Windows engine and print to it
+        if: matrix.os == 'windows-latest'
+        run: npm run smoke:add

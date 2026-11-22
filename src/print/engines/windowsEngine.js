@@ -1,7 +1,11 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const { run: defaultRun } = require('../exec');
 const { CODES, PrintError } = require('../engine');
+const setup = require('./windowsSetup');
 const { worstReason } = require('../reasons');
 
 /**
@@ -79,7 +83,7 @@ function toPrintError(err) {
   return new PrintError(`The Windows print system failed: ${err?.message || err}`, CODES.DRIVER_FAILED);
 }
 
-function createWindowsEngine({ native, pdfiumPath } = {}) {
+function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os.tmpdir() } = {}) {
   let mod = native;
   let ready = false;
   const lastSeen = new Map(); // `${printer}:${job}` -> last job status flags
@@ -167,6 +171,68 @@ function createWindowsEngine({ native, pdfiumPath } = {}) {
         guard((m) => m.cancelJob(printer, Number(jobRef)));
       } catch {
         // already gone
+      }
+    },
+
+    /**
+     * Sets up a printer found on the network (see windowsSetup.js). Shows one Windows
+     * permission prompt (UAC) unless the user is already running as administrator.
+     * @param {object} device  from discovery/merge.js
+     * @returns {Promise<{ name: string, via: string }>}
+     */
+    async addPrinter(device) {
+      const existing = guard((m) => m.listPrinters()).map((p) => p.name);
+      const params = setup.buildParams(device, existing);
+      if (!params) throw new PrintError('This printer did not say how to reach it.', CODES.ADD_FAILED);
+      if (params.mode === 'raw') {
+        // Look for an installed driver first, so a missing one doesn't cost the user a permission prompt
+        let names = [];
+        try {
+          const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-PrinterDriver | ForEach-Object { $_.Name } | ConvertTo-Json -Compress'], { timeoutMs: 30_000 });
+          const parsed = JSON.parse(r.stdout.trim() || '[]');
+          names = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          names = [];
+        }
+        const driver = setup.chooseInstalledDriver(names, params);
+        if (!driver) {
+          throw new PrintError(
+            `Windows has no driver for ${device.name || 'this printer'}. Install the manufacturer's printer software (or run Windows Update), then add the printer again.`,
+            CODES.NEEDS_DRIVER
+          );
+        }
+        params.driver = driver;
+      }
+      const dir = await fs.mkdtemp(path.join(tmpDir, 'fp-add-'));
+      const files = { script: path.join(dir, 'add-printer.ps1'), params: path.join(dir, 'params.json'), result: path.join(dir, 'result.json') };
+      try {
+        await fs.writeFile(files.script, `\ufeff${setup.ADD_PRINTER_SCRIPT}`, 'utf8');
+        await fs.writeFile(files.params, JSON.stringify(params), 'utf8');
+        let launch;
+        try {
+          launch = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', setup.launcherCommand(files.script, files.params, files.result)], { timeoutMs: 180_000 });
+        } catch (err) {
+          throw new PrintError(`Could not start the printer setup: ${err.message}`, CODES.ADD_FAILED);
+        }
+        let result;
+        try {
+          result = JSON.parse((await fs.readFile(files.result, 'utf8')).replace(/^\ufeff/, ''));
+        } catch {
+          // No result: the permission prompt was declined, or the script could not start
+          throw new PrintError(
+            /cancel|denied|elevat/i.test(launch.stderr) || launch.code !== 0
+              ? 'Windows asked for permission to add the printer and it was not given. Choose Yes in the Windows prompt, or ask the person who manages this computer.'
+              : 'The printer setup did not finish.',
+            CODES.NEEDS_ADMIN
+          );
+        }
+        if (!result.ok) {
+          if (result.code === 'NEEDS_DRIVER') throw new PrintError(`Windows has no driver for ${device.name || 'this printer'}.`, CODES.NEEDS_DRIVER);
+          throw new PrintError(`The printer could not be set up: ${String(result.message || 'Windows refused').slice(0, 300)}`, CODES.ADD_FAILED);
+        }
+        return { name: result.name, via: result.via };
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
       }
     },
   };
