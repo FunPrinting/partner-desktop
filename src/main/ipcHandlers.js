@@ -149,6 +149,19 @@ function registerIpcHandlers(getMainWindow, { onSignedIn, printService }) {
       return { ok: false, code: err.code, error: err.message };
     }
   });
+  handle('printers:remove', async (id) => {
+    const current = jobSync.snapshot().current;
+    if (current && current.files.some((f) => !f.done && f.printer && f.printer === printService.registry.get(String(id))?.name)) {
+      return { ok: false, error: 'This printer is printing an order. Remove it after the order finishes.' };
+    }
+    try {
+      const r = await printService.removePrinter(String(id));
+      jobSync.sync('printers changed').catch(() => undefined);
+      return { ok: true, ...r, snapshot: printService.registry.snapshot() };
+    } catch (err) {
+      return { ok: false, code: err.code, error: err.message };
+    }
+  });
   handle('printers:move', async (id) => {
     try {
       await printService.movePrinter(String(id));

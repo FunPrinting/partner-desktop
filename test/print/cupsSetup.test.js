@@ -110,3 +110,14 @@ test('an existing queue name is not reused', async () => {
   assert.equal((await engine.addPrinter(epson)).name, 'EPSON_L3250_Series_2');
   assert.equal(calls[0][2], 'EPSON_L3250_Series_2');
 });
+
+test('removePrinter deletes the queue, treats an already-gone queue as done, and refuses odd names', async () => {
+  const { engine, calls } = engineWith(() => null);
+  assert.deepEqual(await engine.removePrinter('_192_168_1_11'), { removed: true });
+  assert.deepEqual(calls[0], ['lpadmin', '-x', '_192_168_1_11']);
+  const gone = engineWith(() => ({ code: 1, stdout: '', stderr: 'lpadmin: The printer or class does not exist.' })).engine;
+  assert.deepEqual(await gone.removePrinter('Old'), { removed: true });
+  await assert.rejects(engine.removePrinter('a; rm -rf /'), /not a printer name/);
+  const denied = engineWith(() => ({ code: 1, stdout: '', stderr: 'lpadmin: Forbidden' })).engine;
+  await assert.rejects(denied.removePrinter('Epson'), (e) => e.code === 'NEEDS_ADMIN');
+});

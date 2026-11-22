@@ -130,7 +130,23 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
     return { name: printer.name };
   }
 
+  /**
+   * Deletes a printer from this computer's printer list (macOS/Linux: lpadmin -x; Windows:
+   * Remove-Printer after a permission prompt) and forgets its app settings.
+   */
+  async function removePrinter(printerId) {
+    const printer = registry.get(printerId);
+    if (!printer) throw new Error('That printer is no longer listed. Click Refresh.');
+    if (typeof engine.removePrinter !== 'function') throw new Error('Removing printers is not supported on this computer.');
+    await engine.removePrinter(printer.name);
+    registry.forget(printerId);
+    await registry.refresh();
+    finder.scan().catch(() => undefined); // it may now be offered under "Found on your network"
+    return { name: printer.displayName || printer.name };
+  }
+
   return {
+    removePrinter,
     movePrinter,
     scanNetwork,
     addNetworkPrinter,

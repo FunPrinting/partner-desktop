@@ -170,6 +170,16 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     timer = null;
   }
 
+  /** Forget a printer's settings (it was removed from the computer). */
+  function forget(id) {
+    const s = settings();
+    // Keep a record (switched off) rather than deleting it: an empty list would look like a
+    // first run and switch the system default printer on by itself
+    s[id] = { name: s[id]?.name || printers.get(id)?.name, enabled: false, removed: true };
+    saveSettings(s);
+    printers.delete(id);
+    events.emit('changed', snapshot());
+  }
   /** A job finished on this printer: it is on. Clears an "unreachable" shown by a check. */
   function notePrinted(name) {
     lastPrinted.set(name, now());
@@ -214,7 +224,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   function setScanError(error) {
     scanState = { ...scanState, error };
   }
-  return { notePrinted, setMoves, setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  return { forget, notePrinted, setMoves, setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
 module.exports = { createRegistry, PRINTED_PROVES_ON_MS };

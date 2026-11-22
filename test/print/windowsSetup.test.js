@@ -95,3 +95,13 @@ test('a raw printer with a matching driver is added with that driver', async () 
   assert.equal(f.calls.params.driver, 'Brother HL-2130 series');
   assert.equal(f.calls.params.host, '10.0.0.5');
 });
+
+test('removePrinter runs the elevated script in remove mode; an unknown printer is already gone', async () => {
+  const f = fakeRun({ result: { ok: true, name: 'HP', via: '' } });
+  const e = createWindowsEngine({ native, run: f.run });
+  assert.deepEqual(await e.removePrinter('HP'), { removed: true });
+  assert.deepEqual(f.calls.params, { mode: 'remove', name: 'HP' });
+  const g = fakeRun({ result: { ok: true } });
+  assert.deepEqual(await createWindowsEngine({ native, run: g.run }).removePrinter('Not There'), { removed: true });
+  assert.equal(g.calls.length, 0);
+});

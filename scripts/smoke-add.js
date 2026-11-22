@@ -80,7 +80,53 @@ async function main() {
   console.log(`printer received job: ${j.bytes} bytes, format ${j.format}`);
   if (j.bytes < 500) throw new Error(`The job is too small (${j.bytes} bytes)`);
 
-  ps(`Remove-Printer -Name '${added.name}' -ErrorAction SilentlyContinue`);
+  // Remove, the same call as the Settings button (elevated script, remove mode)
+  await engine.removePrinter(added.name);
+  if ((await engine.listPrinters()).some((p) => p.name === added.name)) throw new Error('Remove did not delete the printer');
+  console.log('removed: the printer is gone from Windows');
+
+  // Search: a fake printer that only answers mDNS questions straight back (like a printer
+  // behind Windows Firewall, which drops ordinary multicast answers)
+  const dgram = require('node:dgram');
+  const packet = require('dns-packet');
+  const responder = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  await new Promise((r) => responder.bind(5353, r));
+  for (const a of addresses) {
+    try {
+      responder.addMembership('224.0.0.251', a);
+    } catch {
+      // loopback cannot join
+    }
+  }
+  responder.on('message', (msg, rinfo) => {
+    let q;
+    try {
+      q = packet.decode(msg);
+    } catch {
+      return;
+    }
+    if (q.type !== 'query' || rinfo.port === 5353) return;
+    const answers = [];
+    for (const question of q.questions) {
+      if (question.type === 'PTR' && question.name === '_ipp._tcp.local') {
+        answers.push({ name: '_ipp._tcp.local', type: 'PTR', data: 'FP Fake mDNS._ipp._tcp.local' });
+        answers.push({ name: 'FP Fake mDNS._ipp._tcp.local', type: 'SRV', data: { target: 'fpfake.local', port } });
+        answers.push({ name: 'FP Fake mDNS._ipp._tcp.local', type: 'TXT', data: ['ty=FP Fake mDNS', 'rp=ipp/print', 'UUID=fake-mdns-1', 'Color=T'] });
+        answers.push({ name: 'fpfake.local', type: 'A', data: addresses[0] });
+      }
+    }
+    if (answers.length) {
+      const out = packet.encode({ type: 'response', id: q.id, answers });
+      responder.send(out, 0, out.length, rinfo.port, rinfo.address); // straight back to the asker
+    }
+  });
+  const { browse } = require('../src/print/discovery/browse');
+  const r = await browse({ timeoutMs: 3000 });
+  responder.close();
+  console.log('search stats:', JSON.stringify(r.stats));
+  if (!r.devices.some((d) => d.name === 'FP Fake mDNS')) throw new Error(`Search did not find the fake printer: ${JSON.stringify(r.devices.map((d) => d.name))}`);
+  console.log('search found the fake printer');
+
   await fake.stop();
   console.log('Add-printer smoke test passed');
   process.exit(0);

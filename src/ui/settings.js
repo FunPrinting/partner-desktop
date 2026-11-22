@@ -46,6 +46,7 @@ function initSettings({ getPrefs, setPrefs }) {
           ${moveBtn}
           ${bwBtn}
           <button class="btn btn-plain" data-test="${esc(p.id)}">Test page</button>
+          <button class="btn btn-plain" data-remove="${esc(p.id)}" title="Remove this printer from the computer">Remove</button>
           <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''} ${p.needsTest ? 'disabled' : ''}><span></span></label>
         </div>`;
       })
@@ -162,6 +163,28 @@ function initSettings({ getPrefs, setPrefs }) {
     setPrinters(await window.electronAPI.updatePrinter(input.dataset.printer, { enabled: input.checked }));
   });
   printersList.addEventListener('click', async (e) => {
+    const rm = e.target.closest('[data-remove]');
+    if (rm) {
+      const p = printers.find((x) => x.id === rm.dataset.remove);
+      const name = p ? p.displayName || p.name : 'this printer';
+      const ok = await ask({
+        title: `Remove ${name}?`,
+        message: `It is deleted from this computer's printers, not only from FunPrinting.${platform === 'win' ? ' Windows asks for permission.' : ''} You can add it again from "Found on your network".`,
+        ok: 'Remove',
+        danger: true,
+      });
+      if (!ok) return;
+      rm.disabled = true;
+      const r = await window.electronAPI.removePrinter(rm.dataset.remove);
+      if (r.ok) {
+        setPrinters(r.snapshot);
+        toast(`${r.name} was removed.`);
+      } else {
+        rm.disabled = false;
+        await ask({ title: 'Could not remove the printer', message: r.error, cancel: null });
+      }
+      return;
+    }
     const mv = e.target.closest('[data-move]');
     if (mv) {
       mv.disabled = true;

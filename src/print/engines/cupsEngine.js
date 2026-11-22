@@ -223,6 +223,21 @@ function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {},
       await ipp.cancelJob(printer, Number(jobRef), ippOptions).catch(() => undefined);
     },
 
+    /** Deletes a printer queue from this computer (lpadmin -x; pkexec on Linux when refused). */
+    async removePrinter(printerName) {
+      if (!/^[A-Za-z0-9_.@-]{1,127}$/.test(printerName)) throw new PrintError('That is not a printer name this app can remove.', CODES.ADD_FAILED);
+      let r = await run(lpadminPath, ['-x', printerName], { timeoutMs: 30_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+      if (r.code !== 0 && setup.isPermissionError(r.stderr) && platform === 'linux') {
+        r = await run(pkexecPath, [lpadminPath, '-x', printerName], { timeoutMs: 120_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+      }
+      if (r.code === 0 || /does not exist|not found/i.test(r.stderr)) {
+        capsCache.delete(printerName);
+        return { removed: true };
+      }
+      if (setup.isPermissionError(r.stderr)) throw new PrintError('Removing a printer needs an administrator account on this computer.', CODES.NEEDS_ADMIN);
+      throw new PrintError(`The printer could not be removed: ${r.stderr.trim() || 'the print system refused'}`, CODES.ADD_FAILED);
+    },
+
     /**
      * Points an existing queue at the printer's new address, keeping its protocol, port
      * and path. The .local name is used when there is one, so it survives the next change.

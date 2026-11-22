@@ -129,6 +129,35 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
       throw err instanceof PrintError ? err : toPrintError(err);
     }
   };
+  /** Runs the fixed setup script as administrator (one UAC prompt) with `params` as JSON. */
+  async function runElevated(params) {
+    const dir = await fs.mkdtemp(path.join(tmpDir, 'fp-add-'));
+    const files = { script: path.join(dir, 'add-printer.ps1'), params: path.join(dir, 'params.json'), result: path.join(dir, 'result.json') };
+    try {
+      await fs.writeFile(files.script, `\ufeff${setup.ADD_PRINTER_SCRIPT}`, 'utf8');
+      await fs.writeFile(files.params, JSON.stringify(params), 'utf8');
+      let launch;
+      try {
+        launch = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', setup.launcherCommand(files.script, files.params, files.result)], { timeoutMs: 240_000 });
+      } catch (err) {
+        throw new PrintError(`Could not start the printer setup: ${err.message}`, CODES.ADD_FAILED);
+      }
+      try {
+        return JSON.parse((await fs.readFile(files.result, 'utf8')).replace(/^\ufeff/, ''));
+      } catch {
+        // No result: the permission prompt was declined, or the script could not start
+        throw new PrintError(
+          /cancel|denied|elevat/i.test(launch.stderr) || launch.code !== 0
+            ? 'Windows asked for permission to change printers and it was not given. Choose Yes in the Windows prompt, or ask the person who manages this computer.'
+            : 'The printer setup did not finish.',
+          CODES.NEEDS_ADMIN
+        );
+      }
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   return {
     name: 'windows',
 
@@ -222,37 +251,20 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
         }
         params.driver = driver;
       }
-      const dir = await fs.mkdtemp(path.join(tmpDir, 'fp-add-'));
-      const files = { script: path.join(dir, 'add-printer.ps1'), params: path.join(dir, 'params.json'), result: path.join(dir, 'result.json') };
-      try {
-        await fs.writeFile(files.script, `\ufeff${setup.ADD_PRINTER_SCRIPT}`, 'utf8');
-        await fs.writeFile(files.params, JSON.stringify(params), 'utf8');
-        let launch;
-        try {
-          launch = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', setup.launcherCommand(files.script, files.params, files.result)], { timeoutMs: 240_000 });
-        } catch (err) {
-          throw new PrintError(`Could not start the printer setup: ${err.message}`, CODES.ADD_FAILED);
-        }
-        let result;
-        try {
-          result = JSON.parse((await fs.readFile(files.result, 'utf8')).replace(/^\ufeff/, ''));
-        } catch {
-          // No result: the permission prompt was declined, or the script could not start
-          throw new PrintError(
-            /cancel|denied|elevat/i.test(launch.stderr) || launch.code !== 0
-              ? 'Windows asked for permission to add the printer and it was not given. Choose Yes in the Windows prompt, or ask the person who manages this computer.'
-              : 'The printer setup did not finish.',
-            CODES.NEEDS_ADMIN
-          );
-        }
-        if (!result.ok) {
-          if (result.code === 'NEEDS_DRIVER') throw new PrintError(`Windows has no driver for ${device.name || 'this printer'}.`, CODES.NEEDS_DRIVER);
-          throw new PrintError(`The printer could not be set up: ${String(result.message || 'Windows refused').slice(0, 300)}`, CODES.ADD_FAILED);
-        }
-        return { name: result.name, via: result.via };
-      } finally {
-        await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      const result = await runElevated(params);
+      if (!result.ok) {
+        if (result.code === 'NEEDS_DRIVER') throw new PrintError(`Windows has no driver for ${device.name || 'this printer'}.`, CODES.NEEDS_DRIVER);
+        throw new PrintError(`The printer could not be set up: ${String(result.message || 'Windows refused').slice(0, 300)}`, CODES.ADD_FAILED);
       }
+      return { name: result.name, via: result.via };
+    },
+
+    /** Deletes a printer from Windows (one permission prompt). */
+    async removePrinter(printerName) {
+      if (!guard((m) => m.listPrinters()).some((p) => p.name === printerName)) return { removed: true };
+      const result = await runElevated({ mode: 'remove', name: printerName });
+      if (!result.ok) throw new PrintError(`The printer could not be removed: ${String(result.message || 'Windows refused').slice(0, 300)}`, CODES.ADD_FAILED);
+      return { removed: true };
     },
   };
 }

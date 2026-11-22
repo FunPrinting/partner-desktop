@@ -98,6 +98,10 @@ try {
     }
     Done $false 'ADD_FAILED' $last '' ''
   }
+  if ($p.mode -eq 'remove') {
+    if (Get-Printer -Name $p.name -ErrorAction SilentlyContinue) { Remove-Printer -Name $p.name }
+    Done $true '' '' $p.name ''
+  }
   if ($p.mode -eq 'raw') {
     $driver = $p.driver
     if (-not $driver) { Done $false 'NEEDS_DRIVER' 'No matching driver is installed.' '' '' }

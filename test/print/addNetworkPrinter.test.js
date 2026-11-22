@@ -79,3 +79,21 @@ test('a failing add leaves the list as it was', async () => {
   assert.equal(svc.registry.snapshot().available.length, 1);
   svc.stop();
 });
+
+test('removing a printer deletes it from the computer and forgets its settings', async () => {
+  const { svc, engine } = setup(ippDevice, exact);
+  const removed = [];
+  engine.removePrinter = async (name) => {
+    removed.push(name);
+    return { removed: true }; // (the fake keeps listing it, like a removal that is still in progress)
+  };
+  await svc.start();
+  const office = svc.registry.snapshot().printers.find((p) => p.name === 'Office');
+  assert.equal(office.enabled, true);
+  const r = await svc.removePrinter(office.id);
+  assert.equal(r.name, 'Office');
+  assert.deepEqual(removed, ['Office']);
+  assert.equal(svc.registry.snapshot().printers.find((p) => p.id === office.id)?.enabled ?? false, false);
+  await assert.rejects(svc.removePrinter('nope'), /no longer listed/);
+  svc.stop();
+});
