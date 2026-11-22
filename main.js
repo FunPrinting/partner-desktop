@@ -44,7 +44,16 @@ if (process.argv.includes('--self-test')) {
     quitting = true;
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // On macOS, register this app with the application firewall so printer
+    // discovery (mDNS, IPP sweeps) isn't silently blocked with EHOSTUNREACH.
+    // This must run before any network I/O (printer scans, relay connection).
+    if (process.platform === 'darwin') {
+      const { ensureFirewallAccess } = require('./src/main/firewall');
+      const fw = await ensureFirewallAccess().catch((err) => ({ action: 'error', reason: err.message }));
+      console.log('Firewall check:', JSON.stringify(fw));
+    }
+
     const prefs = require('./src/main/prefs');
     const session = require('./src/main/session');
     const connection = require('./src/main/connection');
