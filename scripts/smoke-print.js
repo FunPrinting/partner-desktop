@@ -63,6 +63,9 @@ async function main() {
     dump('port', `Get-PrinterPort -Name '${out}' | Format-List *`);
     dump('jobs', `Get-PrintJob -PrinterName '${name}' | Format-List *`);
     dump('events', `Get-WinEvent -LogName 'Microsoft-Windows-PrintService/Operational' -MaxEvents 15 -ErrorAction SilentlyContinue | Format-List TimeCreated,Id,Message`);
+    // Control: does this printer work at all on this machine? (plain text through Windows itself)
+    dump('clear stuck jobs', `Get-PrintJob -PrinterName '${name}' | Remove-PrintJob -ErrorAction SilentlyContinue; 'cleared'`);
+    dump('control Out-Printer', `'control page' | Out-Printer -Name '${name}'; Start-Sleep -Seconds 8; if (Test-Path '${out}') { 'CONTROL WROTE FILE: ' + (Get-Item '${out}').Length } else { 'CONTROL WROTE NO FILE' }; Get-Printer -Name '${name}' | Format-List PrinterStatus`);
     throw new Error('The printer wrote no file');
   }
 
