@@ -210,7 +210,7 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
         await fs.writeFile(files.params, JSON.stringify(params), 'utf8');
         let launch;
         try {
-          launch = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', setup.launcherCommand(files.script, files.params, files.result)], { timeoutMs: 180_000 });
+          launch = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', setup.launcherCommand(files.script, files.params, files.result)], { timeoutMs: 240_000 });
         } catch (err) {
           throw new PrintError(`Could not start the printer setup: ${err.message}`, CODES.ADD_FAILED);
         }

@@ -20,7 +20,7 @@ const { trackRuns } = require('../src/print/tracker');
 
 const ps = (script) => {
   try {
-    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' }).trim();
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 60_000 }).trim();
   } catch (e) {
     return `(failed: ${String(e.message).split('\n')[0]})`;
   }
@@ -41,6 +41,8 @@ async function main() {
   const device = { name: 'FP Smoke IPP', serviceName: 'FP Smoke IPP', make: 'FunPrinting', model: 'Fake IPP', host: undefined, addresses, protocols: { ipp: { port, rp: 'ipp/print' } }, announced: {}, preferred: 'ipp' };
 
   const engine = createWindowsEngine();
+  console.log('addresses:', addresses.join(', '));
+  console.log('spooler:', ps('(Get-Service Spooler).Status'));
   let added;
   try {
     added = await engine.addPrinter(device);
@@ -48,7 +50,6 @@ async function main() {
     console.log('addPrinter failed:', err.code, err.message);
     console.log('--- printers\n' + ps('Get-Printer | Format-List Name,DriverName,PortName,PrinterStatus'));
     console.log('--- drivers\n' + ps('Get-PrinterDriver | Select-Object -ExpandProperty Name'));
-    console.log('--- probe\n' + ps(`Add-Printer -Name 'FP Probe' -IppURL 'http://127.0.0.1:${port}/ipp/print' 2>&1 | Out-String`));
     throw err;
   }
   console.log('added:', JSON.stringify(added));

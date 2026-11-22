@@ -47,7 +47,7 @@ function windowsIppUrls(device) {
 /** Everything the script needs. Validated: host names and addresses only, numbers for ports. */
 function buildParams(device, existingNames) {
   const name = printerName(device, existingNames);
-  if (device.protocols.ipp || device.protocols.ipps) return { mode: 'ipp', name, urls: windowsIppUrls(device) };
+  if (device.protocols.ipp || device.protocols.ipps) return { mode: 'ipp', name, urls: windowsIppUrls(device).slice(0, 4) };
   const host = device.addresses.find(net.isIPv4) || device.addresses[0];
   const raw = device.protocols.socket || device.protocols.lpd;
   if (!host || !raw || !net.isIP(host)) return null;
@@ -80,14 +80,21 @@ try {
   if ($p.mode -eq 'ipp') {
     $last = ''
     foreach ($url in $p.urls) {
-      try {
-        Add-Printer -Name $p.name -IppURL $url
-        Done $true '' '' $p.name $url
-      } catch { $last = $_.Exception.Message }
-      try {
-        Add-Printer -Name $p.name -PortName $url -DriverName 'Microsoft IPP Class Driver'
-        Done $true '' '' $p.name $url
-      } catch { $last = $_.Exception.Message }
+      # Each try runs as a job with a time limit: a printer that never answers must not hang the app
+      $job = Start-Job -ScriptBlock { param($n, $u) Add-Printer -Name $n -IppURL $u -ErrorAction Stop } -ArgumentList $p.name, $url
+      if (Wait-Job $job -Timeout 20) {
+        try { Receive-Job $job -ErrorAction Stop | Out-Null; Remove-Job $job -Force; Done $true '' '' $p.name $url }
+        catch { $last = $_.Exception.Message; Remove-Job $job -Force }
+      } else {
+        Stop-Job $job; Remove-Job $job -Force; $last = "No answer from $url within 20 seconds."
+      }
+      $job = Start-Job -ScriptBlock { param($n, $u) Add-Printer -Name $n -PortName $u -DriverName 'Microsoft IPP Class Driver' -ErrorAction Stop } -ArgumentList $p.name, $url
+      if (Wait-Job $job -Timeout 20) {
+        try { Receive-Job $job -ErrorAction Stop | Out-Null; Remove-Job $job -Force; Done $true '' '' $p.name $url }
+        catch { $last = $_.Exception.Message; Remove-Job $job -Force }
+      } else {
+        Stop-Job $job; Remove-Job $job -Force; $last = "No answer from $url within 20 seconds."
+      }
     }
     Done $false 'ADD_FAILED' $last '' ''
   }
