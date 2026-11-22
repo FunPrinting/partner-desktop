@@ -181,6 +181,20 @@ async function browse({ timeoutMs = 3500, deps = {} } = {}) {
     if (!s) continue; // no host or port: nothing to connect to
     records.push({ type: inst.type, name: inst.name, host: s.target, port: s.port, addresses: [...(addrs.get(s.target) || [])], txt: txt.get(fqdn) });
   }
+
+  // On macOS, if UDP sockets found no printers (firewall, sandboxing, or mDNSResponder
+  // monopolising port 5353), use native dns-sd via IPC to mDNSResponder.
+  if (!records.length && process.platform === 'darwin' && !deps.createSocket) {
+    try {
+      const { browseMac } = require('./dnssdMac');
+      const macRecords = await browseMac({ timeoutMs: Math.min(2500, timeoutMs) });
+      if (macRecords && macRecords.length) {
+        records.push(...macRecords);
+        error = undefined;
+      }
+    } catch {}
+  }
+
   if (!error && list.length && stats.adapters.every((a) => a.error)) error = `Could not search the network (${stats.adapters.map((a) => a.error).join(', ')})`;
   return { devices: mergeServices(records), stats, ...(error ? { error } : {}) };
 }

@@ -70,21 +70,21 @@ async function isAppAllowed(appPath) {
 async function addToFirewall(appPath) {
   const normalised = path.normalize(appPath);
   try {
-    // --add registers the app; --unblockapp ensures it's set to "allow"
     await fw(['--add', normalised]);
     await fw(['--unblockapp', normalised]);
-    console.log(`Firewall: registered ${normalised}`);
-    return true;
-  } catch (err) {
-    // If non-admin can't do it, try with osascript privilege elevation
-    console.log(`Firewall: direct add failed (${err.message}), trying with admin privileges…`);
-    try {
-      await elevatedFirewallAdd(normalised);
+    if (await isAppAllowed(normalised)) {
+      console.log(`Firewall: registered ${normalised}`);
       return true;
-    } catch (elErr) {
-      console.error(`Firewall: could not register app: ${elErr.message}`);
-      return false;
     }
+  } catch {}
+
+  console.log(`Firewall: direct registration did not take effect, requesting admin privileges…`);
+  try {
+    await elevatedFirewallAdd(normalised);
+    return await isAppAllowed(normalised);
+  } catch (elErr) {
+    console.error(`Firewall: could not register app: ${elErr.message}`);
+    return false;
   }
 }
 
@@ -136,3 +136,4 @@ async function ensureFirewallAccess() {
 }
 
 module.exports = { ensureFirewallAccess, appBundlePath, isFirewallEnabled, isAppAllowed };
+
