@@ -18,9 +18,10 @@ const { pageCount, withSummary, load, reversePageIndices, PDFDocument } = requir
  * @param {Buffer} [args.summary]     cover sheet PDF to include
  * @param {boolean} [args.cohesive=false] send mixed documents as one single continuous job
  * @param {boolean} [args.reverseOrder=false] print pages in LIFO stack order (Page N to 1) for face-up trays
+ * @param {'fit'|'shrink'|'none'|'fill'} [args.scaling='fit'] page scaling mode
  * @returns {Promise<{ sourcePath: string, request: object, cleanup: () => Promise<void> }>}
  */
-async function prepareFile({ file, cachedPath, workDir, name, summary, cohesive = false, reverseOrder = false }) {
+async function prepareFile({ file, cachedPath, workDir, name, summary, cohesive = false, reverseOrder = false, scaling = 'fit' }) {
   const bytes = await fsp.readFile(cachedPath);
   const duplex = file.sided === 'double';
   if (!summary) {
@@ -37,7 +38,7 @@ async function prepareFile({ file, cachedPath, workDir, name, summary, cohesive 
       await fsp.writeFile(sourcePath, await reversedDoc.save({ useObjectStreams: true }));
       cleanup = () => fsp.rm(sourcePath, { force: true });
     }
-    const request = buildRequest(file, { pageCount: count, cohesive });
+    const request = buildRequest(file, { pageCount: count, cohesive, scaling });
     return { sourcePath, request, cleanup };
   }
   const position = reverseOrder ? 'suffix' : 'prefix';
@@ -50,6 +51,7 @@ async function prepareFile({ file, cachedPath, workDir, name, summary, cohesive 
     prefixPages: merged.prefixPages || 0,
     suffixPages: merged.suffixPages || 0,
     cohesive,
+    scaling,
   });
   return { sourcePath, request, cleanup: () => fsp.rm(sourcePath, { force: true }) };
 }

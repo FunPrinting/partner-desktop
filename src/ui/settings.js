@@ -259,6 +259,10 @@ function initSettings({ getPrefs, setPrefs }) {
     input.addEventListener('change', () => setPrefs({ [input.dataset.pref]: input.checked }));
   });
 
+  document.querySelectorAll('[data-pref-select]').forEach((select) => {
+    select.addEventListener('change', () => setPrefs({ [select.dataset.prefSelect]: select.value }));
+  });
+
   $('theme-picker').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-theme]');
     if (btn) setPrefs({ theme: btn.dataset.theme });
@@ -272,6 +276,9 @@ function initSettings({ getPrefs, setPrefs }) {
   function renderPrefs(p) {
     document.querySelectorAll('[data-pref]').forEach((input) => {
       input.checked = Boolean(p[input.dataset.pref]);
+    });
+    document.querySelectorAll('[data-pref-select]').forEach((select) => {
+      if (p[select.dataset.prefSelect]) select.value = p[select.dataset.prefSelect];
     });
     $('theme-picker')
       .querySelectorAll('[data-theme]')

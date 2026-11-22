@@ -18,7 +18,8 @@ const DEFAULTS = {
   printSummarySheet: true, // order summary page on top of multi-page jobs
   autoReadyForPickup: true, // pickup orders move to "ready for pickup" after printing
   cohesiveJobs: true, // send mixed documents as one continuous job on inkjets
-  lifoStackOrder: false, // LIFO page order (N to 1) for face-up inkjet trays
+  lifoStackOrder: true, // LIFO page order (N to 1) for face-up inkjet trays
+  pageScaling: 'fit', // fit (Fit Printable) | shrink (Shrink Oversized) | none (100% Actual) | fill (Fit Paper)
   openAtLogin: false,
   keepRunningInTray: false, // closing the window keeps printing in the background
   developerMode: false, // show the system log panel
@@ -28,6 +29,7 @@ const TYPES = {
   printerName: (v) => v === null || (typeof v === 'string' && v.length <= 300),
   printers: (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 100_000,
   theme: (v) => v === 'system' || v === 'light' || v === 'dark',
+  pageScaling: (v) => ['fit', 'shrink', 'none', 'fill'].includes(v),
 };
 
 const events = new EventEmitter();

@@ -18,9 +18,10 @@ const { extractPages } = require('./pdf');
  * @param {object} args.request     from buildRequest()
  * @param {string} args.title       job title shown in the OS queue
  */
-async function sendRequest(engine, { printer, sourcePath, request, title }) {
+async function sendRequest(engine, { printer, sourcePath, request, scaling, title }) {
   const created = [];
   const sent = [];
+  const jobScaling = scaling || request.scaling || 'fit';
   let bytes;
   try {
     for (let i = 0; i < request.runs.length; i++) {
@@ -42,6 +43,7 @@ async function sendRequest(engine, { printer, sourcePath, request, title }) {
         media: request.media,
         duplex: request.duplex,
         colour: run.colour,
+        scaling: jobScaling,
       });
       sent.push({ jobRef, run });
     }

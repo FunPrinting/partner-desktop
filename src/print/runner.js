@@ -65,7 +65,8 @@ function createRunner({ engine, registry, cache, renderSummary, workDir, onStatu
     const currentPrefs = typeof cfg.getPrefs === 'function' ? cfg.getPrefs() : (cfg.prefs || {});
     const cohesive = Boolean(currentPrefs.cohesiveJobs);
     const reverseOrder = Boolean(currentPrefs.lifoStackOrder);
-    const prepared = await prepareFile({ file, cachedPath, workDir, name: `${ctx.jobId}-${ctx.index}`, summary, cohesive, reverseOrder }).catch((err) => {
+    const scaling = currentPrefs.pageScaling || 'fit';
+    const prepared = await prepareFile({ file, cachedPath, workDir, name: `${ctx.jobId}-${ctx.index}`, summary, cohesive, reverseOrder, scaling }).catch((err) => {
       throw new PrintError(`The PDF could not be read: ${err.message}`, CODES.FILE_UNREADABLE);
     });
 
@@ -88,7 +89,13 @@ function createRunner({ engine, registry, cache, renderSummary, workDir, onStatu
         const target = choice.printer;
         try {
           say(ctx, 'printing', undefined, { printer: target.name });
-          const sent = await sendRequest(engine, { printer: target.name, sourcePath: prepared.sourcePath, request: prepared.request, title: `${ctx.job.orderId} ${ctx.job.deliveryNumber || ''}`.trim() });
+          const sent = await sendRequest(engine, {
+            printer: target.name,
+            sourcePath: prepared.sourcePath,
+            request: prepared.request,
+            scaling,
+            title: `${ctx.job.orderId} ${ctx.job.deliveryNumber || ''}`.trim()
+          });
           await trackRuns(engine, target.name, sent, {
             onUpdate: (u) => say(ctx, u.state === 'ok' ? 'printing' : u.state, u.reason, { printer: target.name }),
             sleep,

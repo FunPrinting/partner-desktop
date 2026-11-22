@@ -106,3 +106,14 @@ test('sendRequest reports runs already queued when a later run fails', async () 
     return true;
   });
 });
+
+test('buildRequest preserves scaling mode', () => {
+  const rFit = buildRequest({ pages: 2 }, { scaling: 'fit' });
+  assert.equal(rFit.scaling, 'fit');
+  const rShrink = buildRequest({ pages: 2 }, { scaling: 'shrink' });
+  assert.equal(rShrink.scaling, 'shrink');
+  const rNone = buildRequest({ pages: 2 }, { scaling: 'none' });
+  assert.equal(rNone.scaling, 'none');
+  const rFill = buildRequest({ pages: 2 }, { scaling: 'fill' });
+  assert.equal(rFill.scaling, 'fill');
+});

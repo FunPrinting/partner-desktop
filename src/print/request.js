@@ -17,8 +17,9 @@ const MAX_COPIES = 100;
  * @param {number} [opts.prefixPages]  summary pages placed before the document (0, 1, or 2 for duplex)
  * @param {number} [opts.suffixPages]  summary pages placed after the document (for face-up trays)
  * @param {boolean} [opts.cohesive]    send as one single cohesive run without splitting mixed color
+ * @param {'fit'|'shrink'|'none'|'fill'} [opts.scaling='fit'] page scaling mode
  */
-function buildRequest(file, { pageCount, prefixPages = 0, suffixPages = 0, cohesive = false } = {}) {
+function buildRequest(file, { pageCount, prefixPages = 0, suffixPages = 0, cohesive = false, scaling = 'fit' } = {}) {
   const media = MEDIA.has(file.pageSize) ? file.pageSize : 'A4';
   const duplex = file.sided === 'double';
   const copies = Math.min(MAX_COPIES, Math.max(1, Math.floor(Number(file.copies)) || 1));
@@ -46,7 +47,7 @@ function buildRequest(file, { pageCount, prefixPages = 0, suffixPages = 0, cohes
     runs.push({ pages: Array.from({ length: suffix }, (_, i) => totalBefore + i + 1), colour: 'bw', copies: 1, summary: true });
   }
 
-  return { media, duplex, copies, colour, totalPages: prefix + docPages + suffix, prefixPages: prefix, suffixPages: suffix, runs };
+  return { media, duplex, copies, colour, totalPages: prefix + docPages + suffix, prefixPages: prefix, suffixPages: suffix, runs, scaling };
 }
 
 /** Pages the summary takes: one, or two for double-sided so the document starts on a new sheet. */

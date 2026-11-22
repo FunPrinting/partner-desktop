@@ -77,7 +77,19 @@ test('lp gets every option the printer supports, and nothing it does not', async
   assert.ok(epson.includes('sides=one-sided'));
   assert.ok(epson.includes('print-color-mode=color'));
   assert.ok(epson.includes('fit-to-page'));
-  assert.ok(!epson.includes('-n'));
+  // Scaling options mapping to IPP print-scaling keywords
+  const fitArgs = await engine.argsFor({ printer: 'EPSON_L3250', file: '/tmp/b.pdf', copies: 1, media: 'A4', duplex: false, colour: 'color', scaling: 'fit' });
+  assert.ok(fitArgs.includes('print-scaling=fit'));
+  assert.ok(fitArgs.includes('fit-to-page'));
+
+  const shrinkArgs = await engine.argsFor({ printer: 'EPSON_L3250', file: '/tmp/b.pdf', copies: 1, media: 'A4', duplex: false, colour: 'color', scaling: 'shrink' });
+  assert.ok(shrinkArgs.includes('print-scaling=auto-fit'));
+
+  const noneArgs = await engine.argsFor({ printer: 'EPSON_L3250', file: '/tmp/b.pdf', copies: 1, media: 'A4', duplex: false, colour: 'color', scaling: 'none' });
+  assert.ok(noneArgs.includes('print-scaling=none'));
+
+  const fillArgs = await engine.argsFor({ printer: 'EPSON_L3250', file: '/tmp/b.pdf', copies: 1, media: 'A4', duplex: false, colour: 'color', scaling: 'fill' });
+  assert.ok(fillArgs.includes('print-scaling=fill'));
 });
 
 test('PPD-only colour and duplex choices are added for driver queues', () => {

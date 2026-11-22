@@ -174,10 +174,26 @@ function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {},
         const sides = job.duplex && c.duplex ? 'two-sided-long-edge' : 'one-sided';
         if (c.sides.includes(sides)) args.push('-o', `sides=${sides}`);
       }
-      const colourMode = job.colour === 'color' ? 'color' : 'monochrome';
+      const colourMode = job.colour === 'color' ? 'color' : job.colour === 'mixed' ? (c.colourModes.includes('auto') ? 'auto' : 'color') : 'monochrome';
       if (c.colourModes.includes(colourMode)) args.push('-o', `print-color-mode=${colourMode}`);
       for (const kv of ppdExtras(ppd, { colour: job.colour, duplex: job.duplex && c.duplex })) args.push('-o', kv);
-      if (job.fit) args.push('-o', 'fit-to-page');
+      if (job.scaling || job.fit) {
+        const scaling = job.scaling || 'fit';
+        switch (scaling) {
+          case 'none':
+            args.push('-o', 'print-scaling=none');
+            break;
+          case 'shrink':
+            args.push('-o', 'print-scaling=auto-fit');
+            break;
+          case 'fill':
+            args.push('-o', 'print-scaling=fill');
+            break;
+          default: // 'fit'
+            args.push('-o', 'print-scaling=fit', '-o', 'fit-to-page');
+            break;
+        }
+      }
       args.push('--', job.file);
       return args;
     },

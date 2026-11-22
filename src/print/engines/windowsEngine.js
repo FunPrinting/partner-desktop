@@ -173,7 +173,17 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
     async print(job) {
       const m = guard((x) => x, loadForPrinting);
       try {
-        const out = await m.print({ printer: job.printer, file: job.file, title: String(job.title || 'FunPrinting').slice(0, 200), copies: job.copies, duplex: Boolean(job.duplex), color: job.colour === 'color', paper: job.media === 'A3' ? 'A3' : 'A4' });
+        const printOpts = {
+          printer: job.printer,
+          file: job.file,
+          title: String(job.title || 'FunPrinting').slice(0, 200),
+          copies: job.copies,
+          duplex: Boolean(job.duplex),
+          color: job.colour === 'color' || job.colour === 'mixed',
+          paper: job.media === 'A3' ? 'A3' : 'A4',
+        };
+        if (job.scaling) printOpts.scaling = job.scaling;
+        const out = await m.print(printOpts);
         return { jobRef: String(out.jobId), mode: out.mode, pages: out.pages };
       } catch (err) {
         throw toPrintError(err);
