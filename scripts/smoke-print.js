@@ -78,7 +78,11 @@ async function main() {
   if (result.getPageCount() !== 4) throw new Error(`Expected 4 pages, got ${result.getPageCount()}`);
   if (Math.abs(dims[0] - 595) > 3 || Math.abs(dims[1] - 842) > 3) throw new Error(`Expected A4 (595 x 842), got ${dims.join(' x ')}`);
 
-  ps(`Remove-Printer -Name '${name}'; Remove-PrinterPort -Name '${out}' -ErrorAction SilentlyContinue`);
+  try {
+    ps(`Remove-Printer -Name '${name}' -ErrorAction SilentlyContinue; Remove-PrinterPort -Name '${out}' -ErrorAction SilentlyContinue`);
+  } catch {
+    // The CI machine is thrown away; cleanup is a courtesy
+  }
   console.log('Smoke test passed');
 }
 
