@@ -5,6 +5,7 @@ const net = require('node:net');
 const ipp = require('../ipp');
 const { capabilitiesFrom, printerFrom } = require('../engines/cupsEngine');
 const { ippUrl } = require('./merge');
+const { isPrivateHost, connectPinned } = require('./trust');
 
 /**
  * Asks a printer on the network about itself, the same way CUPS does for a set-up queue:
@@ -32,59 +33,103 @@ const REQUESTED = [
   'ipp-versions-supported',
 ];
 
-/** Hosts on a local network, where printers' self-signed certificates are the norm. */
-function isPrivateHost(host) {
-  const h = String(host).replace(/^\[|\]$/g, '').toLowerCase();
-  if (h.endsWith('.local') || !h.includes('.') && !h.includes(':')) return true;
-  if (net.isIPv4(h)) return /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
-  if (net.isIPv6(h)) return /^(fe80:|fc|fd|::1$)/.test(h);
-  return false;
-}
-
-/** One Get-Printer-Attributes request to an ipp:// or ipps:// URL. Returns the attribute map. */
-function getAttributes(url, { timeoutMs = 4000, request } = {}) {
+/**
+ * One Get-Printer-Attributes request to an ipp:// or ipps:// URL. Returns the attribute map.
+ *
+ * ipps:// goes over TLS 1.2+ with the printer's certificate pinned (see trust.js):
+ * `pin` is the saved fingerprint, and `onFingerprint(fp)` receives the one seen, so the
+ * caller can save it. A changed certificate rejects with code CERT_CHANGED.
+ */
+async function getAttributes(url, { timeoutMs = 4000, request, pin, onFingerprint } = {}) {
   const u = new URL(url.replace(/^ipp/, 'http'));
   const secure = url.startsWith('ipps:');
   const port = Number(u.port) || 631;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
   const body = ipp.encode(ipp.Op.GetPrinterAttributes, 1, [
     ipp.attr(ipp.Tag.uri, 'printer-uri', url.replace(/^ipps:/, 'ipp:')),
     ipp.attr(ipp.Tag.name, 'requesting-user-name', 'FunPrinting'),
     ipp.attr(ipp.Tag.keyword, 'requested-attributes', REQUESTED),
   ]);
-  const send = request || ((opts, cb) => (secure ? https : http).request(opts, cb));
-  return new Promise((resolve, reject) => {
-    const req = send(
-      {
-        method: 'POST',
-        host: u.hostname.replace(/^\[|\]$/g, ''),
-        port,
-        path: u.pathname || '/',
-        headers: { 'Content-Type': 'application/ipp', 'Content-Length': body.length },
-        timeout: timeoutMs,
-        // A printer's own certificate is self-signed. Only trust that on a local network.
-        ...(secure ? { rejectUnauthorized: !isPrivateHost(u.hostname) } : {}),
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          if (res.statusCode !== 200) return reject(Object.assign(new Error(`The printer answered HTTP ${res.statusCode}`), { http: res.statusCode }));
+  const options = {
+    method: 'POST',
+    host,
+    port,
+    path: u.pathname || '/',
+    headers: { 'Content-Type': 'application/ipp', 'Content-Length': body.length },
+    timeout: timeoutMs,
+  };
+  if (secure) {
+    // Connect first and check the certificate; the request then reuses that connection
+    const { socket, fingerprint } = await connectPinned({ host, port, pin, timeoutMs });
+    if (onFingerprint) onFingerprint(fingerprint);
+    // Build the request manually over the TLS socket
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      let headerParsed = false;
+      let contentLength = 0;
+      let bodyStart = 0;
+      const fail = (err) => {
+        socket.destroy();
+        reject(err);
+      };
+      const tryParse = () => {
+        const raw = Buffer.concat(chunks);
+        if (!headerParsed) {
+          const headerEnd = raw.indexOf('\r\n\r\n');
+          if (headerEnd === -1) return;
+          const headers = raw.subarray(0, headerEnd).toString('utf8');
+          const statusMatch = headers.match(/^HTTP\/\d\.\d (\d+)/);
+          if (!statusMatch) return fail(new Error('No HTTP status line'));
+          const statusCode = Number(statusMatch[1]);
+          if (statusCode !== 200) return fail(Object.assign(new Error(`The printer answered HTTP ${statusCode}`), { http: statusCode }));
+          const lengthMatch = headers.match(/Content-Length:\s*(\d+)/i);
+          contentLength = lengthMatch ? Number(lengthMatch[1]) : 0;
+          bodyStart = headerEnd + 4;
+          headerParsed = true;
+        }
+        if (headerParsed && raw.length >= bodyStart + contentLength) {
+          socket.destroy();
           try {
-            const out = ipp.decode(Buffer.concat(chunks));
-            if (out.statusCode > 0xff) return reject(Object.assign(new Error(`The printer refused (0x${out.statusCode.toString(16)})`), { ipp: out.statusCode }));
+            const out = ipp.decode(raw.subarray(bodyStart));
+            if (out.statusCode > 0xff) return fail(Object.assign(new Error(`The printer refused (0x${out.statusCode.toString(16)})`), { ipp: out.statusCode }));
             resolve(out.groups.find((g) => g.name === 'printer')?.attrs || {});
           } catch (err) {
-            reject(err);
+            fail(err);
           }
-        });
-      }
-    );
+        }
+      };
+      socket.setTimeout(timeoutMs, () => fail(new Error('The printer did not answer in time')));
+      socket.on('error', fail);
+      socket.on('data', (chunk) => {
+        chunks.push(chunk);
+        tryParse();
+      });
+      const req = `POST ${u.pathname || '/'} HTTP/1.1\r\nHost: ${host}\r\nContent-Type: application/ipp\r\nContent-Length: ${body.length}\r\n\r\n`;
+      socket.write(req);
+      socket.write(body);
+    });
+  }
+  const send = request || ((opts, cb) => http.request(opts, cb));
+  return new Promise((resolve, reject) => {
+    const req = send(options, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(Object.assign(new Error(`The printer answered HTTP ${res.statusCode}`), { http: res.statusCode }));
+        try {
+          const out = ipp.decode(Buffer.concat(chunks));
+          if (out.statusCode > 0xff) return reject(Object.assign(new Error(`The printer refused (0x${out.statusCode.toString(16)})`), { ipp: out.statusCode }));
+          resolve(out.groups.find((g) => g.name === 'printer')?.attrs || {});
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
     req.on('timeout', () => req.destroy(new Error('The printer did not answer in time')));
     req.on('error', reject);
     req.end(body);
   });
 }
-
 function tcpOpen(host, port, timeoutMs = 2000) {
   return new Promise((resolve) => {
     const s = net.connect({ host, port });
