@@ -50,7 +50,21 @@ async function main() {
     await new Promise((r) => setTimeout(r, 500));
   }
   for (let i = 0; i < 40 && !fs.existsSync(out); i++) await new Promise((r) => setTimeout(r, 250));
-  if (!fs.existsSync(out)) throw new Error('The printer wrote no file');
+  if (!fs.existsSync(out)) {
+    const dump = (label, script) => {
+      try {
+        console.log(`--- ${label}\n${ps(script).trim()}`);
+      } catch (e) {
+        console.log(`--- ${label} failed: ${e.message}`);
+      }
+    };
+    console.log('--- files in', dir, fs.readdirSync(dir));
+    dump('printer', `Get-Printer -Name '${name}' | Format-List Name,DriverName,PortName,PrinterStatus`);
+    dump('port', `Get-PrinterPort -Name '${out}' | Format-List *`);
+    dump('jobs', `Get-PrintJob -PrinterName '${name}' | Format-List *`);
+    dump('events', `Get-WinEvent -LogName 'Microsoft-Windows-PrintService/Operational' -MaxEvents 15 -ErrorAction SilentlyContinue | Format-List TimeCreated,Id,Message`);
+    throw new Error('The printer wrote no file');
+  }
 
   const result = await PDFDocument.load(fs.readFileSync(out));
   const page = result.getPage(0);
