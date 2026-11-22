@@ -149,6 +149,14 @@ function registerIpcHandlers(getMainWindow, { onSignedIn, printService }) {
       return { ok: false, code: err.code, error: err.message };
     }
   });
+  handle('printers:move', async (id) => {
+    try {
+      await printService.movePrinter(String(id));
+      return { ok: true, snapshot: printService.registry.snapshot() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
   handle('printers:update', (id, patch) => {
     if (typeof id !== 'string') throw new Error('Unknown printer');
     const p = patch && typeof patch === 'object' ? patch : {};

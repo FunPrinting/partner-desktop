@@ -5,6 +5,7 @@ const { run: defaultRun } = require('../exec');
 const { CODES, PrintError } = require('../engine');
 const { worstReason } = require('../reasons');
 const setup = require('./cupsSetup');
+const { endpointOf } = require('../discovery/match');
 
 /**
  * macOS and Linux engine: CUPS.
@@ -210,6 +211,28 @@ function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {},
 
     async cancel(printer, jobRef) {
       await ipp.cancelJob(printer, Number(jobRef), ippOptions).catch(() => undefined);
+    },
+
+    /**
+     * Points an existing queue at the printer's new address, keeping its protocol, port
+     * and path. The .local name is used when there is one, so it survives the next change.
+     */
+    async movePrinter(printerName, device) {
+      const attrs = await ipp.getPrinterAttributes(printerName, ippOptions);
+      const current = attrs['device-uri']?.[0];
+      const ep = endpointOf(current);
+      if (!ep || !/^(ipps?|socket|lpd)$/.test(ep.scheme)) throw new PrintError('This printer is not a network printer.', CODES.ADD_FAILED);
+      const where = (ep.scheme.startsWith('ipp') && device.host) || device.addresses.find((a) => !a.includes(':')) || device.host;
+      if (!where) throw new PrintError('The printer did not say where it is.', CODES.ADD_FAILED);
+      const u = new URL(current.replace(/^(ipps?|socket|lpd)/i, 'http'));
+      const next = `${ep.scheme}://${where}:${ep.port}${u.pathname === '/' && ep.scheme === 'socket' ? '' : u.pathname}${u.search}`;
+      const r = await run(lpadminPath, ['-p', printerName, '-v', next], { timeoutMs: 30_000 });
+      if (r.code !== 0) {
+        if (setup.isPermissionError(r.stderr)) throw new PrintError('Changing a printer needs an administrator account on this computer.', CODES.NEEDS_ADMIN);
+        throw new PrintError(`The address could not be changed: ${r.stderr.trim() || 'the print system refused'}`, CODES.ADD_FAILED);
+      }
+      capsCache.delete(printerName);
+      return { uri: next };
     },
 
     /**

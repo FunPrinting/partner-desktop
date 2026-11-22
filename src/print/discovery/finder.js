@@ -1,14 +1,14 @@
 'use strict';
 const { browse: defaultBrowse } = require('./browse');
 const { probeDevice: defaultProbe } = require('./probe');
-const { findSetUp } = require('./match');
+const { findSetUp, computeMoves } = require('./match');
 
 /**
  * Finds printers on the network that are not yet set up on this computer.
  * Each scan: browse -> probe every device (exact properties for IPP printers) -> drop the
  * ones the OS already has -> hand the rest to the registry as `available`.
  */
-function createFinder({ registry, browse = defaultBrowse, probe = defaultProbe, browseMs = 3500, ttlMs = 5 * 60_000, now = () => Date.now() }) {
+function createFinder({ registry, canMove = false, browse = defaultBrowse, probe = defaultProbe, browseMs = 3500, ttlMs = 5 * 60_000, now = () => Date.now() }) {
   let scanning = null;
   let found = []; // devices with probe results, set up or not
   let lastScanAt = 0;
@@ -35,6 +35,7 @@ function createFinder({ registry, browse = defaultBrowse, probe = defaultProbe, 
         })),
       { scanning: Boolean(scanning), lastScanAt }
     );
+    registry.setMoves(canMove ? computeMoves(printers, found) : []);
   }
 
   async function doScan() {

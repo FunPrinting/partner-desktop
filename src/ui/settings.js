@@ -33,9 +33,13 @@ function initSettings({ getPrefs, setPrefs }) {
           p.enabled && enabledCount > 1 && p.caps?.color
             ? `<button class="btn btn-plain" data-bw="${esc(p.id)}" aria-pressed="${p.preferredBw}">${p.preferredBw ? 'Preferred for B&amp;W ✓' : 'Prefer for B&amp;W'}</button>`
             : '';
+        const move = moves.find((m) => m.printerId === p.id);
+        const moveBtn = move ? `<button class="btn btn-primary" data-move="${esc(p.id)}" title="Found at ${esc(move.address || 'a new address')}">Update address</button>` : '';
+        const moveNote = move ? `<div class="row-sub">This printer has a new address (${esc(move.address || 'new')}). Update the address to use it again.</div>` : '';
         return `<div class="row">
           ${icon('printer')}
-          <div class="row-main"><div class="row-title">${esc(p.displayName || p.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${badges(p)}</div></div>
+          <div class="row-main"><div class="row-title">${esc(p.displayName || p.name)}</div><div class="row-sub">${esc(sub)}</div>${moveNote}<div class="row-sub">${badges(p)}</div></div>
+          ${moveBtn}
           ${bwBtn}
           <button class="btn btn-plain" data-test="${esc(p.id)}">Test page</button>
           <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''} ${p.needsTest ? 'disabled' : ''}><span></span></label>
@@ -46,6 +50,7 @@ function initSettings({ getPrefs, setPrefs }) {
 
   const foundList = $('found-list');
   let found = [];
+  let moves = [];
   let scanning = false;
   let addingId = null;
   const addErrors = {};
@@ -74,6 +79,7 @@ function initSettings({ getPrefs, setPrefs }) {
   function setPrinters(snap) {
     printers = (snap && snap.printers) || [];
     found = (snap && snap.available) || [];
+    moves = (snap && snap.moves) || [];
     scanning = Boolean(snap && snap.scan && snap.scan.scanning);
     renderPrinters();
     renderFound();
@@ -102,6 +108,19 @@ function initSettings({ getPrefs, setPrefs }) {
     setPrinters(await window.electronAPI.updatePrinter(input.dataset.printer, { enabled: input.checked }));
   });
   printersList.addEventListener('click', async (e) => {
+    const mv = e.target.closest('[data-move]');
+    if (mv) {
+      mv.disabled = true;
+      const r = await window.electronAPI.movePrinter(mv.dataset.move);
+      if (r.ok) {
+        setPrinters(r.snapshot);
+        toast('The printer address was updated.');
+      } else {
+        mv.disabled = false;
+        await ask({ title: 'Could not update the address', message: r.error, cancel: null });
+      }
+      return;
+    }
     const test = e.target.closest('[data-test]');
     if (test) {
       test.disabled = true;

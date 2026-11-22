@@ -14,13 +14,14 @@ const { EventEmitter } = require('node:events');
  * - First run: the system default printer is enabled. A printer chosen in the older app
  *   version (`legacyPrinterName`) is enabled instead.
  */
-function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 60_000, now = () => Date.now() }) {
+function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 60_000, now = () => Date.now(), reach = null }) {
   const events = new EventEmitter();
   let printers = new Map(); // id -> entry
   let timer = null;
   let refreshing = null;
   let lastError = null;
   let lastRefreshAt = null;
+  let moves = []; // set-up printers that stopped answering, with where they now are
   let available = []; // found on the network, not set up here (set by discovery/finder.js)
   let scanState = { scanning: false, lastScanAt: 0, error: null };
 
@@ -42,6 +43,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
         sourceUrl: s[p.id]?.sourceUrl,
       })),
       available,
+      moves,
       scan: scanState,
       lastRefreshAt,
       lastError,
@@ -81,6 +83,15 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
       lastError = err.message;
       events.emit('changed', snapshot());
       return snapshot();
+    }
+    // A network printer that is switched off, or has a new IP address, does not answer
+    if (reach) {
+      await Promise.all(
+        list.map(async (p) => {
+          const answer = await reach(p).catch(() => null);
+          if (answer && answer.reachable === false) p.status = { ...(p.status || {}), online: false, state: 'unreachable', message: answer.message };
+        })
+      );
     }
     const next = new Map();
     for (const p of list) {
@@ -164,6 +175,12 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     saveSettings(s);
     events.emit('changed', snapshot());
   }
+  /** Set-up printers that can be pointed at a found printer's new address. */
+  function setMoves(list) {
+    if (JSON.stringify(list) === JSON.stringify(moves)) return;
+    moves = list;
+    events.emit('available', snapshot());
+  }
   /** Network printers that are not set up on this computer. */
   function setAvailable(list, { scanning = false, lastScanAt = scanState.lastScanAt } = {}) {
     const before = JSON.stringify([available, scanState.scanning]);
@@ -174,7 +191,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   function setScanError(error) {
     scanState = { ...scanState, error };
   }
-  return { setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  return { setMoves, setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
 module.exports = { createRegistry };

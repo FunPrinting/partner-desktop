@@ -51,14 +51,16 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
   const { renderSummary } = require('./summary');
 
   const { createFinder } = require('./discovery/finder');
+  const { createReach } = require('./discovery/reach');
   const registry = createRegistry({
     engine,
+    reach: createReach(),
     store: {
       get: () => prefs.get().printers || {},
       set: (value) => prefs.set({ printers: value }),
     },
   });
-  const finder = createFinder({ registry, ...discovery });
+  const finder = createFinder({ registry, canMove: typeof engine.movePrinter === 'function', ...discovery });
   const cache = createCache({ dir: path.join(dataDir, 'print-cache') });
   const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
 
@@ -115,7 +117,20 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
     return { name, id: added.id, enabled: !(found.probe.estimated || !found.probe.reachable) };
   }
 
+  /** Points a set-up queue at the address its printer now has (macOS and Linux). */
+  async function movePrinter(printerId) {
+    const move = registry.snapshot().moves.find((m) => m.printerId === printerId);
+    const printer = registry.get(printerId);
+    const found = move && finder.device(move.toId);
+    if (!move || !printer || !found) throw new Error('This printer cannot be moved right now. Search again.');
+    await engine.movePrinter(printer.name, found);
+    await registry.refresh();
+    finder.scan().catch(() => undefined);
+    return { name: printer.name };
+  }
+
   return {
+    movePrinter,
     scanNetwork,
     addNetworkPrinter,
     printTestPage,

@@ -64,6 +64,24 @@ function sameHost(a, b) {
   return x.replace(/\.local$/, '') === y.replace(/\.local$/, '') && !net.isIP(x);
 }
 
+const DEFAULT_PORT = { ipp: 631, ipps: 631, http: 631, https: 631, socket: 9100, lpd: 515 };
+
+/** { scheme, host, port } of a network device URI or URL port name, or null (USB, WSD, "IP_x"...). */
+function endpointOf(uriOrPort) {
+  const s = String(uriOrPort || '').trim();
+  const m = /^(ipps?|socket|lpd|https?):\/\//i.exec(s);
+  if (!m) return null;
+  try {
+    const scheme = m[1].toLowerCase();
+    const u = new URL(s.replace(/^(ipps?|socket|lpd)/i, 'http'));
+    const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
+    if (!host) return null;
+    return { scheme, host, port: Number(u.port) || DEFAULT_PORT[scheme] };
+  } catch {
+    return null;
+  }
+}
+
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 /** True if this OS printer is the found device. */
@@ -93,4 +111,30 @@ function findSetUp(device, printers) {
   return printers.find((p) => isSame(p, device));
 }
 
-module.exports = { whereIs, isSame, findSetUp };
+module.exports = { whereIs, endpointOf, isSame, findSetUp };
+
+const modelKey = (s) => norm(String(s || '').replace(/\bseries\b/gi, ''));
+
+/**
+ * Set-up network printers that stopped answering while a printer of the same model shows
+ * up on the network at another address. Only offered when it is unambiguous: one such
+ * queue, one such device.
+ */
+function computeMoves(printers, devices) {
+  const unmatched = devices.filter((d) => !findSetUp(d, printers));
+  const gone = printers.filter((p) => p.status && p.status.state === 'unreachable' && endpointOf(p.uri));
+  const moves = [];
+  for (const p of gone) {
+    const key = modelKey(p.driver) || modelKey(p.displayName) || modelKey(p.name);
+    const sameModel = (d) => (p.source && (p.source === d.id || p.source === d.uuid)) || (key && [d.model, d.name, d.serviceName].some((x) => modelKey(x) === key));
+    const candidates = unmatched.filter(sameModel);
+    const rivals = gone.filter((q) => q !== p && (modelKey(q.driver) || modelKey(q.displayName) || modelKey(q.name)) === key);
+    if (candidates.length === 1 && !rivals.length) {
+      const d = candidates[0];
+      moves.push({ printerId: p.id, printerName: p.displayName || p.name, toId: d.id, toName: d.name, address: d.addresses[0] || d.host });
+    }
+  }
+  return moves;
+}
+
+module.exports.computeMoves = computeMoves;
