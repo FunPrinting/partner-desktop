@@ -20,7 +20,9 @@ const ps = (script) => execFileSync('powershell.exe', ['-NoProfile', '-NonIntera
 
 async function main() {
   if (process.platform !== 'win32') throw new Error('This smoke test runs on Windows only');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-smoke-'));
+  // A plain path: the temp folder's 8.3 short name (RUNNER~1) stops the PDF printer writing there
+  const dir = path.join(process.env.SystemDrive ? `${process.env.SystemDrive}\\` : 'C:\\', `fpsmoke${Date.now()}`);
+  fs.mkdirSync(dir, { recursive: true });
   const out = path.join(dir, 'printed.pdf');
   const name = 'FP Smoke PDF';
 
