@@ -5,7 +5,7 @@ const net = require('node:net');
 const ipp = require('../ipp');
 const { capabilitiesFrom, printerFrom } = require('../engines/cupsEngine');
 const { ippUrl } = require('./merge');
-const { isPrivateHost, connectPinned } = require('./trust');
+const { isPrivateHost, connectPinned, CertChangedError } = require('./trust');
 
 /**
  * Asks a printer on the network about itself, the same way CUPS does for a set-up queue:
@@ -130,6 +130,7 @@ async function getAttributes(url, { timeoutMs = 4000, request, pin, onFingerprin
     req.end(body);
   });
 }
+
 function tcpOpen(host, port, timeoutMs = 2000) {
   return new Promise((resolve) => {
     const s = net.connect({ host, port });
@@ -147,30 +148,44 @@ const OFFLINE = { online: false, state: 'unknown', reasons: [], message: 'The pr
 
 /**
  * @param {object} device  from merge.js
- * @returns {Promise<{ reachable: boolean, estimated: boolean, caps: object|null, status: object, makeAndModel?: string, uuid?: string, url?: string, error?: string }>}
+ * @param {object} [opts]
+ * @param {string} [opts.pin]  saved fingerprint for this device (hex, any case or colons)
+ * @param {function} [opts.onPin]  callback(fingerprint) when IPPS succeeds
+ * @param {boolean} [opts.secureOnly]  true after a successful IPPS connection: never downgrade to plain IPP
+ * @returns {Promise<{ reachable: boolean, estimated: boolean, caps: object|null, status: object, security: string, fingerprint?: string, certChanged?: boolean, expectedFingerprint?: string, seenFingerprint?: string, makeAndModel?: string, uuid?: string, url?: string, error?: string }>}
  */
-async function probeDevice(device, { timeoutMs = 4000, get = getAttributes, tcp = tcpOpen } = {}) {
-  // Try the host name first (survives IP changes), then each address
+async function probeDevice(device, { timeoutMs = 4000, get = getAttributes, tcp = tcpOpen, pin, onPin, secureOnly } = {}) {
+  // Try the host name first (survives IP changes), then each address. IPPS before plain IPP.
   const targets = [];
   for (const preferHostName of [true, false]) {
     const url = ippUrl(device, { preferHostName });
     if (url && !targets.includes(url)) targets.push(url);
   }
-  if (device.protocols.ipps && device.protocols.ipp) {
-    // IPPS first; if the TLS handshake fails (old firmware), plain IPP on the same LAN
+  // If both IPPS and plain IPP are offered and we haven't locked to IPPS-only yet, add the plain fallback
+  if (device.protocols.ipps && device.protocols.ipp && !secureOnly) {
     const p = device.protocols.ipp;
     const where = device.host || device.addresses[0];
     if (where) targets.push(`ipp://${net.isIPv6(where) ? `[${where}]` : where}:${p.port}/${p.rp}`);
   }
   let lastError;
+  let fingerprint;
   for (const url of targets) {
     try {
-      const attrs = await get(url, { timeoutMs });
+      const attrs = await get(url, {
+        timeoutMs,
+        pin: url.startsWith('ipps:') ? pin : undefined,
+        onFingerprint: (fp) => {
+          fingerprint = fp;
+          if (onPin) onPin(fp);
+        },
+      });
       const reasonsAndState = printerFrom({ 'printer-name': [device.name], ...attrs }, null).status;
       return {
         reachable: true,
         estimated: false,
         url,
+        security: url.startsWith('ipps:') ? 'encrypted' : 'not-encrypted',
+        fingerprint,
         caps: capabilitiesFrom(attrs),
         status: reasonsAndState,
         makeAndModel: attrs['printer-make-and-model']?.[0],
@@ -178,6 +193,19 @@ async function probeDevice(device, { timeoutMs = 4000, get = getAttributes, tcp 
         formats: attrs['document-format-supported'] || [],
       };
     } catch (err) {
+      if (err.code === 'CERT_CHANGED') {
+        return {
+          reachable: false,
+          estimated: false,
+          certChanged: true,
+          expectedFingerprint: err.expected,
+          seenFingerprint: err.seen,
+          security: 'encrypted',
+          caps: null,
+          status: { online: false, state: 'unknown', reasons: [], message: "The printer's security certificate has changed." },
+          error: err.message,
+        };
+      }
       lastError = err.message;
     }
   }
@@ -189,11 +217,12 @@ async function probeDevice(device, { timeoutMs = 4000, get = getAttributes, tcp 
     return {
       reachable: true,
       estimated: true,
+      security: 'not-encrypted',
       caps: { color: Boolean(a.color), duplex: Boolean(a.duplex), media: ['A4'], sides: [], colourModes: [], mediaKeywords: [] },
       status: { online: true, state: 'unknown', reasons: [], message: undefined },
     };
   }
-  return { reachable: false, estimated: !targets.length, caps: null, status: OFFLINE, error: lastError };
+  return { reachable: false, estimated: !targets.length, security: secureOnly ? 'encrypted' : 'error', caps: null, status: OFFLINE, error: lastError };
 }
 
 module.exports = { probeDevice, getAttributes, isPrivateHost, tcpOpen };

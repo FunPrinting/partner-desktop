@@ -71,15 +71,20 @@ async function sweep({ interfaces, connectMs = 350, concurrency = 64, open = por
     // Many printers only talk encrypted IPP on port 631 (plain requests get HTTP 426 Upgrade
     // Required), others only plain: try the encrypted form first, then plain.
     let secure = true;
+    let fingerprint;
     for (const rp of IPP_PATHS) {
       let attrs;
       for (const scheme of secure ? ['ipps', 'ipp'] : ['ipp']) {
         try {
-          attrs = await attributes(`${scheme}://${host}:631/${rp}`, { timeoutMs: 3000 });
+          attrs = await attributes(`${scheme}://${host}:631/${rp}`, {
+            timeoutMs: 3000,
+            // No pin: this is a fresh search. The fingerprint is recorded for when the device is added.
+            onFingerprint: (fp) => (fingerprint = fp),
+          });
           secure = scheme === 'ipps';
           break;
         } catch (err) {
-          if (scheme === 'ipps' && err.code && /EPROTO|ECONNRESET|ERR_SSL|WRONG_VERSION/i.test(err.code)) secure = false; // no TLS on this host
+          if (scheme === 'ipps' && err.code && /EPROTO|ECONNRESET|ERR_SSL|WRONG_VERSION|CERT_CHANGED/i.test(err.code)) secure = false; // no TLS on this host
         }
       }
       if (!attrs) continue;
@@ -90,6 +95,7 @@ async function sweep({ interfaces, connectMs = 350, concurrency = 64, open = por
       const sides = attrs['sides-supported'] || [];
       records.push({
         type: secure ? '_ipps._tcp' : '_ipp._tcp',
+        fingerprint,
         name: String(attrs['printer-info']?.[0] || attrs['printer-make-and-model']?.[0] || attrs['printer-name']?.[0] || host),
         host: undefined,
         port: 631,
