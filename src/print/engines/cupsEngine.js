@@ -4,6 +4,7 @@ const defaultIpp = require('../ipp');
 const { run: defaultRun } = require('../exec');
 const { CODES, PrintError } = require('../engine');
 const { worstReason } = require('../reasons');
+const setup = require('./cupsSetup');
 
 /**
  * macOS and Linux engine: CUPS.
@@ -102,7 +103,7 @@ function lpError(stderr, printer) {
   return new PrintError(`Printing failed: ${s || 'lp exited with an error'}`, CODES.DRIVER_FAILED, s);
 }
 
-function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {}, lpPath = 'lp', lpstatPath = 'lpstat', lpoptionsPath = 'lpoptions' } = {}) {
+function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {}, lpPath = 'lp', lpstatPath = 'lpstat', lpoptionsPath = 'lpoptions', lpadminPath = 'lpadmin', lpinfoPath = 'lpinfo', platform = process.platform, pkexecPath = 'pkexec' } = {}) {
   const capsCache = new Map(); // name -> { at, caps, ppd }
 
   async function defaultPrinter() {
@@ -209,6 +210,55 @@ function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {},
 
     async cancel(printer, jobRef) {
       await ipp.cancelJob(printer, Number(jobRef), ippOptions).catch(() => undefined);
+    },
+
+    /**
+     * Sets up a printer found on the network as a CUPS queue.
+     *   IPP printers (nearly all Wi-Fi printers): driverless (`-m everywhere`), connected by
+     *     the printer's .local name so a new IP address doesn't break it.
+     *   Raw 9100 / LPD printers: need the manufacturer's PPD, picked from `lpinfo -m`.
+     * @param {object} device  from discovery/merge.js
+     * @returns {Promise<{ name: string, via: string }>}
+     */
+    async addPrinter(device) {
+      const existing = (await ipp.getPrinters(ippOptions).catch(() => [])).map((a) => a['printer-name']?.[0]).filter(Boolean);
+      const name = setup.queueName(device, existing);
+      const common = ['-p', name, '-E', '-D', String(device.name || name).slice(0, 120)];
+      if (device.location) common.push('-L', String(device.location).slice(0, 120));
+      const attempts = [];
+      if (device.protocols.ipp || device.protocols.ipps) {
+        for (const url of setup.ippCandidates(device)) attempts.push({ via: url, args: [...common, '-v', url, '-m', 'everywhere'] });
+      } else {
+        const uri = setup.rawUri(device);
+        if (!uri) throw new PrintError('This printer did not say how to reach it.', CODES.ADD_FAILED);
+        let drivers = [];
+        try {
+          drivers = setup.parseDrivers((await run(lpinfoPath, ['-m'], { timeoutMs: 60_000 })).stdout);
+        } catch {
+          // fall through to "no driver"
+        }
+        const driver = setup.pickDriver(drivers, { make: device.make, model: device.model });
+        if (!driver) {
+          throw new PrintError(
+            `This computer has no driver for ${device.name || 'this printer'}. Install the manufacturer's printer software, then add the printer again.`,
+            CODES.NEEDS_DRIVER
+          );
+        }
+        attempts.push({ via: uri, args: [...common, '-v', uri, '-m', driver.id] });
+      }
+      let last = '';
+      for (const a of attempts) {
+        let r = await run(lpadminPath, a.args, { timeoutMs: 60_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+        if (r.code !== 0 && setup.isPermissionError(r.stderr) && platform === 'linux') {
+          r = await run(pkexecPath, [lpadminPath, ...a.args], { timeoutMs: 120_000 }).catch((err) => ({ code: 1, stdout: '', stderr: err.message }));
+        }
+        if (r.code === 0) return { name, via: a.via };
+        if (setup.isPermissionError(r.stderr)) {
+          throw new PrintError('Adding a printer needs an administrator account on this computer. Ask the person who manages it, or add the printer in System Settings.', CODES.NEEDS_ADMIN);
+        }
+        last = r.stderr.trim() || last;
+      }
+      throw new PrintError(`The printer could not be set up: ${last || 'the print system refused'}`, CODES.ADD_FAILED);
     },
   };
 }

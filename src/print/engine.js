@@ -10,6 +10,7 @@
  *   print(job: EngineJob): Promise<{ jobRef: string }>   resolves once the job is in the OS queue
  *   jobStatus(printerName, jobRef): Promise<JobState>
  *   cancel(printerName, jobRef): Promise<void>
+ *   addPrinter(device, opts?): Promise<{ name }>   optional: sets up a network printer in the OS
  *
  * Printer      { name, displayName, isDefault, uri?, driver?, location? }
  * Capabilities { color: boolean, duplex: boolean, media: string[], postscript?: boolean, trays?: string[] }
@@ -27,6 +28,9 @@ const CODES = Object.freeze({
   FILE_UNREADABLE: 'FILE_UNREADABLE',
   TIMEOUT: 'TIMEOUT',
   CANCELLED: 'CANCELLED',
+  NEEDS_DRIVER: 'NEEDS_DRIVER', // adding a printer: no driver for this model on this computer
+  NEEDS_ADMIN: 'NEEDS_ADMIN', // adding a printer: the user may not change printers
+  ADD_FAILED: 'ADD_FAILED',
   UNKNOWN: 'UNKNOWN',
 });
 
