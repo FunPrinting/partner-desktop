@@ -136,6 +136,19 @@ function registerIpcHandlers(getMainWindow, { onSignedIn, printService }) {
       return { ok: false, error: err.message };
     }
   });
+  handle('printers:scan', async () => {
+    await printService.scanNetwork();
+    return printService.registry.snapshot();
+  });
+  handle('printers:add', async (foundId) => {
+    try {
+      const r = await printService.addNetworkPrinter(String(foundId));
+      jobSync.sync('printers changed').catch(() => undefined);
+      return { ok: true, ...r, snapshot: printService.registry.snapshot() };
+    } catch (err) {
+      return { ok: false, code: err.code, error: err.message };
+    }
+  });
   handle('printers:update', (id, patch) => {
     if (typeof id !== 'string') throw new Error('Unknown printer');
     const p = patch && typeof patch === 'object' ? patch : {};

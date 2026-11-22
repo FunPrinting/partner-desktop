@@ -28,7 +28,7 @@ function initSettings({ getPrefs, setPrefs }) {
     printersList.innerHTML = printers
       .map((p) => {
         const offline = p.status && p.status.online === false;
-        const sub = offline ? p.status.message || 'Not ready' : p.status?.message || (p.isDefault ? 'System default' : 'Ready');
+        const sub = p.needsTest ? 'Print a test page to switch it on. This printer\'s abilities are not confirmed yet.' : offline ? p.status.message || 'Not ready' : p.status?.message || (p.isDefault ? 'System default' : 'Ready');
         const bwBtn =
           p.enabled && enabledCount > 1 && p.caps?.color
             ? `<button class="btn btn-plain" data-bw="${esc(p.id)}" aria-pressed="${p.preferredBw}">${p.preferredBw ? 'Preferred for B&amp;W ✓' : 'Prefer for B&amp;W'}</button>`
@@ -38,7 +38,34 @@ function initSettings({ getPrefs, setPrefs }) {
           <div class="row-main"><div class="row-title">${esc(p.displayName || p.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${badges(p)}</div></div>
           ${bwBtn}
           <button class="btn btn-plain" data-test="${esc(p.id)}">Test page</button>
-          <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''}><span></span></label>
+          <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''} ${p.needsTest ? 'disabled' : ''}><span></span></label>
+        </div>`;
+      })
+      .join('');
+  }
+
+  const foundList = $('found-list');
+  let found = [];
+  let scanning = false;
+  let addingId = null;
+  const addErrors = {};
+
+  function renderFound() {
+    $('scan-printers-btn').disabled = scanning;
+    if (!found.length) {
+      foundList.innerHTML = `<div class="row"><div class="row-main"><div class="row-title">${scanning ? 'Searching…' : 'No new printers found'}</div></div></div>`;
+      return;
+    }
+    foundList.innerHTML = found
+      .map((f) => {
+        const c = f.caps;
+        const abilities = c ? [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided'), (c.media || []).includes('A3') ? pill('A3') : ''].join(' ') : '';
+        const sub = !f.reachable ? (f.status && f.status.message) || 'Not answering' : f.estimated ? 'Abilities are estimated from what the printer announced. Print a test page after adding it.' : f.address ? `Wi-Fi · ${f.address}` : 'Wi-Fi';
+        const busy = addingId === f.id;
+        return `<div class="row">
+          ${icon('printer')}
+          <div class="row-main"><div class="row-title">${esc(f.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${abilities}</div>${addErrors[f.id] ? `<div class="row-sub" style="color:var(--danger,#c0392b)">${esc(addErrors[f.id])}</div>` : ''}</div>
+          <button class="btn btn-primary" data-add="${esc(f.id)}" ${busy || addingId ? 'disabled' : ''}>${busy ? 'Adding…' : 'Add'}</button>
         </div>`;
       })
       .join('');
@@ -46,7 +73,10 @@ function initSettings({ getPrefs, setPrefs }) {
 
   function setPrinters(snap) {
     printers = (snap && snap.printers) || [];
+    found = (snap && snap.available) || [];
+    scanning = Boolean(snap && snap.scan && snap.scan.scanning);
     renderPrinters();
+    renderFound();
   }
 
   async function loadPrinters() {
@@ -87,6 +117,35 @@ function initSettings({ getPrefs, setPrefs }) {
     if (!btn) return;
     const on = btn.getAttribute('aria-pressed') !== 'true';
     setPrinters(await window.electronAPI.updatePrinter(btn.dataset.bw, { preferredBw: on }));
+  });
+  foundList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-add]');
+    if (!btn || addingId) return;
+    const id = btn.dataset.add;
+    const item = found.find((f) => f.id === id);
+    delete addErrors[id];
+    addingId = id;
+    renderFound();
+    const r = await window.electronAPI.addPrinter(id);
+    addingId = null;
+    if (r.ok) {
+      setPrinters(r.snapshot);
+      toast(r.enabled ? `${r.name} is ready to print.` : `${r.name} was added. Print a test page to switch it on.`);
+    } else {
+      addErrors[id] = r.error || 'The printer could not be added.';
+      renderFound();
+      if (r.code === 'NEEDS_DRIVER') await ask({ title: `Install the driver for ${item ? item.name : 'this printer'}`, message: r.error, cancel: null });
+    }
+  });
+  $('scan-printers-btn').addEventListener('click', async () => {
+    scanning = true;
+    renderFound();
+    try {
+      setPrinters(await window.electronAPI.scanPrinters());
+    } catch {
+      scanning = false;
+      renderFound();
+    }
   });
   window.electronAPI.onPrintersChanged(setPrinters);
   $('refresh-printers-btn').addEventListener('click', refreshPrinters);

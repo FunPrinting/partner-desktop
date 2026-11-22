@@ -32,7 +32,6 @@ function createFinder({ registry, browse = defaultBrowse, probe = defaultProbe, 
           caps: d.probe.caps,
           status: d.probe.status,
           error: d.probe.error,
-          device: d,
         })),
       { scanning: Boolean(scanning), lastScanAt }
     );

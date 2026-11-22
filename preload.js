@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPrinters: () => ipcRenderer.invoke('printers:list'),
   refreshPrinters: () => ipcRenderer.invoke('printers:refresh'),
   testPrinter: (id) => ipcRenderer.invoke('printers:test', id),
+  scanPrinters: () => ipcRenderer.invoke('printers:scan'),
+  addPrinter: (foundId) => ipcRenderer.invoke('printers:add', foundId),
   updatePrinter: (id, patch) => ipcRenderer.invoke('printers:update', id, patch),
   onPrintersChanged: (cb) => listen('printers-changed', cb),
   // Preferences

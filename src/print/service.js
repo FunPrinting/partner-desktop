@@ -42,13 +42,15 @@ function describeStatus(e) {
  * @param {object} [deps.powerMonitor]
  * @param {(status: object) => void} [deps.onStatus]  runner progress
  * @param {object} [deps.engine]     override (tests)
+ * @param {object} [deps.discovery]  { browse, probe } overrides (tests)
  */
-function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {}, engine = createEngine() }) {
+function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {}, engine = createEngine(), discovery = {} }) {
   const { createRegistry } = require('./registry');
   const { createCache } = require('./cache');
   const { createRunner } = require('./runner');
   const { renderSummary } = require('./summary');
 
+  const { createFinder } = require('./discovery/finder');
   const registry = createRegistry({
     engine,
     store: {
@@ -56,8 +58,11 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
       set: (value) => prefs.set({ printers: value }),
     },
   });
+  const finder = createFinder({ registry, ...discovery });
   const cache = createCache({ dir: path.join(dataDir, 'print-cache') });
   const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
+
+  let scanTimer = null;
 
   /** Prints a test page on one printer; resolves with how long it took until the printer finished. */
   async function printTestPage(printerId) {
@@ -77,13 +82,41 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
       const request = buildRequest({ pageSize: 'A4', color: colour ? 'color' : 'bw', sided: 'single', copies: 1 }, { pageCount: 1 });
       const sent = await sendRequest(engine, { printer: printer.name, sourcePath: file, request, title: 'FunPrinting test page' });
       await trackRuns(engine, printer.name, sent, { onUpdate: (u) => onStatus({ state: u.state === 'ok' ? 'printing' : u.state, reason: u.reason, printer: printer.name, fileName: 'Test page', status: u.reason || 'Printing the test page…' }) });
+      // A printer we could only estimate is switched on once it has printed a test page
+      if (registry.snapshot().printers.find((p) => p.id === printerId)?.needsTest) {
+        registry.setNeedsTest(printerId, false);
+        registry.update(printerId, { enabled: true });
+      }
       return { ms: Date.now() - started };
     } finally {
       await fs.rm(file, { force: true });
     }
   }
 
+  /** Looks for printers on the network that are not set up here. */
+  const scanNetwork = () => finder.scan();
+
+  /**
+   * Sets a found network printer up in the OS. IPP printers (exact properties) are switched
+   * on straight away; others wait for a test page. Resolves with { name, id, enabled }.
+   */
+  async function addNetworkPrinter(foundId) {
+    const found = finder.device(foundId);
+    if (!found) throw new Error('That printer was not found. Search again.');
+    if (typeof engine.addPrinter !== 'function') throw new Error('Adding printers is not supported on this computer.');
+    const { name } = await engine.addPrinter(found);
+    await registry.refresh();
+    const added = registry.snapshot().printers.find((p) => p.name === name);
+    if (!added) return { name, id: null, enabled: false };
+    if (found.probe.estimated || !found.probe.reachable) registry.setNeedsTest(added.id, true);
+    else registry.update(added.id, { enabled: true });
+    finder.scan().catch(() => undefined); // the found list drops it
+    return { name, id: added.id, enabled: !(found.probe.estimated || !found.probe.reachable) };
+  }
+
   return {
+    scanNetwork,
+    addNetworkPrinter,
     printTestPage,
     engine,
     registry,
@@ -92,9 +125,18 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
     /** Starts watching printers; enables the printer chosen in the earlier app version. */
     async start() {
       cache.prune().catch(() => undefined);
-      return registry.start({ powerMonitor, legacyPrinterName: prefs.get().printerName });
+      const first = registry.start({ powerMonitor, legacyPrinterName: prefs.get().printerName });
+      // Look for network printers in the background: now, every 5 minutes and after sleep
+      finder.scan().catch(() => undefined);
+      scanTimer = setInterval(() => finder.scan().catch(() => undefined), 5 * 60_000);
+      scanTimer.unref?.();
+      powerMonitor?.on('resume', () => finder.scan().catch(() => undefined));
+      return first;
     },
-    stop: () => registry.stop(),
+    stop: () => {
+      registry.stop();
+      clearInterval(scanTimer);
+    },
   };
 }
 

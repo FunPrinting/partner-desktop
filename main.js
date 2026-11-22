@@ -88,6 +88,7 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     printService.registry.events.on('changed', (printers) => send('printers-changed', printers));
+    printService.registry.events.on('available', (printers) => send('printers-changed', printers));
 
     const printerReporter = require('./src/main/printerReport').createPrinterReporter({ registry: printService.registry });
 

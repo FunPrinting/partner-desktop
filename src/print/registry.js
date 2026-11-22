@@ -37,6 +37,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
         ...p,
         enabled: Boolean(s[p.id]?.enabled),
         preferredBw: Boolean(s[p.id]?.preferredBw),
+        needsTest: Boolean(s[p.id]?.needsTest),
       })),
       available,
       scan: scanState,
@@ -143,17 +144,26 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     timer = null;
   }
 
+  /** A printer whose properties are only estimated stays off until a test page has printed. */
+  function setNeedsTest(id, value) {
+    const p = printers.get(id);
+    if (!p) return;
+    const s = settings();
+    s[id] = { ...(s[id] || {}), name: p.name, needsTest: Boolean(value), ...(value ? { enabled: false } : {}) };
+    saveSettings(s);
+    events.emit('changed', snapshot());
+  }
   /** Network printers that are not set up on this computer. */
   function setAvailable(list, { scanning = false, lastScanAt = scanState.lastScanAt } = {}) {
-    const before = JSON.stringify([available.map(({ device, ...a }) => a), scanState.scanning]);
+    const before = JSON.stringify([available, scanState.scanning]);
     available = list;
     scanState = { ...scanState, scanning, lastScanAt };
-    if (before !== JSON.stringify([available.map(({ device, ...a }) => a), scanState.scanning])) events.emit('available', snapshot());
+    if (before !== JSON.stringify([available, scanState.scanning])) events.emit('available', snapshot());
   }
   function setScanError(error) {
     scanState = { ...scanState, error };
   }
-  return { setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  return { setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
 module.exports = { createRegistry };
