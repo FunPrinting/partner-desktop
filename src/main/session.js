@@ -251,6 +251,7 @@ async function apiFetch(path, { method = 'GET', body, timeoutMs = REQUEST_TIMEOU
       method,
       headers: {
         Authorization: `Bearer ${token}`,
+        'X-App-Platform': 'desktop',
         'X-App-Version': app.getVersion(),
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },

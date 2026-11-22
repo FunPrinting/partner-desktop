@@ -64,7 +64,8 @@ function initJobs() {
       if (!s.printersReady) n.push(banner('info', 'No printer is ready', 'Open Settings and switch on the printers this computer should use. Jobs are only taken while one is ready.'));
       if (s.paused) n.push(banner('warning', 'Printing is paused', 'New jobs wait in your shop\'s queue until you resume.'));
       if (s.cooldownUntil) n.push(banner('danger', 'The last job failed', `It went back to your queue. The next job starts in ${timeLeft(s.cooldownUntil)}; check the printer.`));
-      if (s.lastError) n.push(banner('warning', 'Can\'t reach FunPrinting', `${s.lastError}. Retrying automatically.`));
+      if (s.lastError && /no longer supported/i.test(s.lastError)) n.push(banner('danger', 'Update the app to keep printing', 'This version is no longer supported. Open Settings and choose Check for updates, or install the latest version from the FunPrinting website.'));
+      else if (s.lastError) n.push(banner('warning', 'Can\'t reach FunPrinting', `${s.lastError}. Retrying automatically.`));
       if (s.pendingReports) n.push(banner('info', `${s.pendingReports} finished job(s) will be reported when the connection is back`));
     }
     notes.innerHTML = n.join('');
