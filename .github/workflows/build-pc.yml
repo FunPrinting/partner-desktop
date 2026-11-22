@@ -33,6 +33,9 @@ jobs:
 
       - name: Bump Version
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+      - name: Build native print engine (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm run build:native
 
       - name: Build Windows Executable
         if: matrix.os == 'windows-latest'

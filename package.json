@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",
-    "build": "electron-builder --win --mac"
+    "build": "electron-builder --win --mac",
+    "build:native": "node scripts/build-native.js",
+    "test:native": "cargo test --manifest-path native/fp-print/Cargo.toml --lib",
+    "smoke:print": "node scripts/smoke-print.js"
   },
   "keywords": [],
   "author": "",
@@ -55,6 +58,21 @@
       ],
       "icon": "build/icons/icon.icns",
       "identity": null
-    }
+    },
+    "files": [
+      "**/*",
+      "!native/fp-print/target/**",
+      "!native/fp-print/src/**",
+      "!native/fp-print/Cargo.*",
+      "!native/fp-print/build.rs",
+      "!test/**",
+      "!scripts/**",
+      "!.github/**",
+      "!dist/**"
+    ],
+    "asarUnpack": [
+      "native/fp-print/fp-print.node",
+      "native/fp-print/pdfium.dll"
+    ]
   }
 }

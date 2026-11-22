@@ -1,2 +1,9 @@
 node_modules/
 dist/
+
+# Native print add-on build output
+native/fp-print/target/
+native/fp-print/fp-print.node
+native/fp-print/pdfium.dll
+native/fp-print/pdfium.*.sha256
+native/fp-print/PDFIUM-LICENSE.txt

@@ -1,0 +1,34 @@
+[package]
+name = "fp-print"
+version = "1.0.0"
+edition = "2021"
+description = "FunPrinting Partner: silent PDF printing on Windows (PDFium -> GDI vector output)"
+license = "UNLICENSED"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+napi = { version = "3.16", default-features = false, features = ["napi4"] }
+napi-derive = "3.7"
+libloading = "0.9"
+
+[build-dependencies]
+napi-build = "2.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+opt-level = 3
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62.2"
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Printing",
+  "Win32_Security",
+  "Win32_Storage_Xps",
+]
