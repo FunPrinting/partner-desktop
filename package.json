@@ -9,7 +9,8 @@
     "build": "electron-builder --win --mac",
     "build:native": "node scripts/build-native.js",
     "test:native": "cargo test --manifest-path native/fp-print/Cargo.toml --lib",
-    "smoke:print": "node scripts/smoke-print.js"
+    "smoke:print": "node scripts/smoke-print.js",
+    "discover": "node scripts/discover.js"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +19,7 @@
   "dependencies": {
     "electron-updater": "^6.8.9",
     "leaflet": "^1.9.4",
+    "multicast-dns": "^7.2.5",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "socket.io-client": "^4.8.4",
