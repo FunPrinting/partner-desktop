@@ -205,11 +205,11 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     events.emit('available', snapshot());
   }
   /** Network printers that are not set up on this computer. */
-  function setAvailable(list, { scanning = false, lastScanAt = scanState.lastScanAt } = {}) {
-    const before = JSON.stringify([available, scanState.scanning]);
+  function setAvailable(list, { scanning = false, lastScanAt = scanState.lastScanAt, stats = scanState.stats } = {}) {
+    const before = JSON.stringify([available, scanState.scanning, scanState.stats]);
     available = list;
-    scanState = { ...scanState, scanning, lastScanAt };
-    if (before !== JSON.stringify([available, scanState.scanning])) events.emit('available', snapshot());
+    scanState = { ...scanState, scanning, lastScanAt, stats };
+    if (before !== JSON.stringify([available, scanState.scanning, scanState.stats])) events.emit('available', snapshot());
   }
   function setScanError(error) {
     scanState = { ...scanState, error };

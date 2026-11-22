@@ -60,7 +60,7 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
       set: (value) => prefs.set({ printers: value }),
     },
   });
-  const finder = createFinder({ registry, canMove: typeof engine.movePrinter === 'function', ...discovery });
+  const finder = createFinder({ registry, canMove: typeof engine.movePrinter === 'function', log: (m) => console.log(m), ...discovery });
   const cache = createCache({ dir: path.join(dataDir, 'print-cache') });
   const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
 
@@ -97,7 +97,7 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
   }
 
   /** Looks for printers on the network that are not set up here. */
-  const scanNetwork = () => finder.scan();
+  const scanNetwork = () => finder.scan({ thorough: true });
 
   /**
    * Sets a found network printer up in the OS. IPP printers (exact properties) are switched

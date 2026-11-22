@@ -58,12 +58,13 @@ function makeRegistry(printers) {
 }
 
 const found = mergeServices([{ type: '_ipp._tcp', name: 'EPSON L3250 Series', host: 'EPSON1.local', port: 631, addresses: ['192.168.1.9'], txt: { ty: 'EPSON L3250 Series', UUID, rp: 'ipp/print', Color: 'T' } }]);
+const noSweep = async () => ({ records: [], stats: {} });
 const probed = { reachable: true, estimated: false, caps: { color: true, duplex: false, media: ['A4'] }, status: { online: true } };
 
 test('finder publishes printers that are not set up, with their properties', async () => {
   const registry = makeRegistry([{ name: 'Office', displayName: 'Office', isDefault: true, uri: 'usb://HP/1' }]);
   await registry.refresh();
-  const finder = createFinder({ registry, browse: async () => ({ devices: found }), probe: async () => probed, browseMs: 1 });
+  const finder = createFinder({ registry, browse: async () => ({ devices: found }), sweep: noSweep, probe: async () => probed, browseMs: 1 });
   const events = [];
   registry.events.on('available', (s) => events.push(s.scan.scanning));
   const snap = await finder.scan();
@@ -76,24 +77,50 @@ test('finder publishes printers that are not set up, with their properties', asy
   assert.deepEqual(events, [true, false]);
 });
 
-test('a printer already set up is not offered again, and appears again if it is removed', async () => {
+test('a printer already set up is still listed, saying so, so a search never looks empty', async () => {
   const registry = makeRegistry([{ name: 'Epson', displayName: 'Epson', isDefault: false, uri: 'ipp://192.168.1.9:631/ipp/print' }]);
   await registry.refresh();
-  const finder = createFinder({ registry, browse: async () => ({ devices: found }), probe: async () => probed, browseMs: 1 });
-  assert.equal((await finder.scan()).available.length, 0);
+  const finder = createFinder({ registry, browse: async () => ({ devices: found }), sweep: noSweep, probe: async () => probed, browseMs: 1 });
+  const snap = await finder.scan();
+  assert.equal(snap.available.length, 1);
+  assert.equal(snap.available[0].setUpAs, 'Epson');
+});
+
+test('when mDNS finds nothing, the network sweep is tried and its printers are listed', async () => {
+  const registry = makeRegistry([]);
+  const swept = { records: [{ type: '_ipp._tcp', name: 'HP LaserJet', port: 631, addresses: ['192.168.1.40'], txt: { ty: 'HP LaserJet', rp: 'ipp/print', UUID: 'hp-1' } }], stats: { subnets: ['192.168.1.0/24'], open: ['192.168.1.40'], printers: 1 } };
+  let sweeps = 0;
+  const logs = [];
+  const finder = createFinder({ registry, browse: async () => ({ devices: [], stats: { adapters: [{ name: 'Wi-Fi', address: '192.168.1.5', answers: 0 }], shared: 'EACCES' } }), sweep: async () => ((sweeps += 1), swept), probe: async () => probed, browseMs: 1, log: (m) => logs.push(m) });
+  const snap = await finder.scan();
+  assert.equal(sweeps, 1);
+  assert.deepEqual(snap.available.map((a) => a.name), ['HP LaserJet']);
+  assert.equal(snap.scan.stats.mdnsFound, 0);
+  assert.deepEqual(snap.scan.stats.swept.open, ['192.168.1.40']);
+  assert.match(logs[0], /Printer search/);
+});
+
+test('the Search button also sweeps when mDNS found something; a periodic scan does not', async () => {
+  const registry = makeRegistry([]);
+  let sweeps = 0;
+  const finder = createFinder({ registry, browse: async () => ({ devices: found }), sweep: async () => ((sweeps += 1), { records: [], stats: {} }), probe: async () => probed, browseMs: 1 });
+  await finder.scan();
+  assert.equal(sweeps, 0);
+  await finder.scan({ thorough: true });
+  assert.equal(sweeps, 1);
 });
 
 test('concurrent scans share one browse', async () => {
   const registry = makeRegistry([]);
   let n = 0;
-  const finder = createFinder({ registry, browse: async () => ((n += 1), { devices: [] }), probe: async () => probed, browseMs: 1 });
+  const finder = createFinder({ registry, browse: async () => ((n += 1), { devices: [] }), sweep: noSweep, probe: async () => probed, browseMs: 1 });
   await Promise.all([finder.scan(), finder.scan()]);
   assert.equal(n, 1);
 });
 
 test('a probe that throws still lists the printer as unreachable', async () => {
   const registry = makeRegistry([]);
-  const finder = createFinder({ registry, browse: async () => ({ devices: found }), probe: async () => { throw new Error('boom'); }, browseMs: 1 });
+  const finder = createFinder({ registry, browse: async () => ({ devices: found }), sweep: noSweep, probe: async () => { throw new Error('boom'); }, browseMs: 1 });
   const snap = await finder.scan();
   assert.equal(snap.available[0].reachable, false);
 });

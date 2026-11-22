@@ -27,7 +27,7 @@ function setup(devices, probe) {
       return { name: device.name, via: 'x' };
     },
   };
-  const svc = createPrintService({ prefs: { get: () => ({ printers: saved }), set: (p) => (saved = p.printers) }, dataDir: dir, engine, discovery: { browse: async () => ({ devices }), probe: async () => probe, browseMs: 1 } });
+  const svc = createPrintService({ prefs: { get: () => ({ printers: saved }), set: (p) => (saved = p.printers) }, dataDir: dir, engine, discovery: { browse: async () => ({ devices }), sweep: async () => ({ records: [], stats: {} }), probe: async () => probe, browseMs: 1 } });
   return { svc, engine };
 }
 
@@ -40,7 +40,8 @@ test('adding an IPP printer switches it on', async () => {
   assert.equal(r.enabled, true);
   const after = svc.registry.snapshot();
   assert.equal(after.printers.find((p) => p.name === 'Test Printer X').enabled, true);
-  assert.equal(after.available.length, 0);
+  assert.equal(after.available.length, 1);
+  assert.equal(after.available[0].setUpAs, 'Test Printer X');
   svc.stop();
 });
 

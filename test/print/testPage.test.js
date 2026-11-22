@@ -13,7 +13,7 @@ test('test page prints one A4 page on the chosen printer', async () => {
   let saved = {};
   const prefs = { get: () => ({ printers: saved }), set: (p) => (saved = p.printers) };
   const engine = createFileEngine({ dir });
-  const svc = createPrintService({ prefs, dataDir: dir, engine });
+  const svc = createPrintService({ prefs, dataDir: dir, engine, discovery: { browse: async () => ({ devices: [] }), sweep: async () => ({ records: [], stats: {} }) } });
   await svc.start();
   const id = svc.registry.snapshot().printers[0].id;
   const { ms } = await svc.printTestPage(id);

@@ -11,7 +11,7 @@ test('service: first run enables the default printer and saves settings in prefs
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-svc-'));
   let saved = {};
   const prefs = { get: () => ({ printers: saved }), set: (patch) => (saved = patch.printers) };
-  const svc = createPrintService({ prefs, dataDir: dir, engine: createFileEngine({ dir }) });
+  const svc = createPrintService({ prefs, dataDir: dir, engine: createFileEngine({ dir }), discovery: { browse: async () => ({ devices: [] }), sweep: async () => ({ records: [], stats: {} }) } });
   await svc.start();
   const snap = svc.registry.snapshot();
   assert.equal(snap.printers.length, 1);
