@@ -92,6 +92,7 @@ function createRunner({ engine, registry, cache, renderSummary, workDir, onStatu
             now,
             describePending: () => registry.get(target.id)?.status?.message,
           });
+          registry.notePrinted?.(target.name);
           return { printer: target.name, printerId: target.id };
         } catch (err) {
           if (err instanceof JobCancelled) throw err;

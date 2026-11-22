@@ -51,7 +51,7 @@ test('a PDFium that will not load fails printing but still lists printers', asyn
 test('in the installed app the native files are read from app.asar.unpacked', () => {
   const { nativeDir } = require('../../src/print/engines/windowsEngine');
   assert.match(nativeDir('C:\\Program Files\\FunPrinting Partner\\resources\\app.asar'), /resources\\app\.asar\.unpacked[\\/]native[\\/]fp-print$/);
-  assert.match(nativeDir('/opt/app/resources/app.asar'), /app\.asar\.unpacked\/native\/fp-print$/);
+  assert.match(nativeDir('/opt/app/resources/app.asar'), /app\.asar\.unpacked[\\/]native[\\/]fp-print$/);
   assert.equal(nativeDir('/src/partner-desktop'), require('node:path').join('/src/partner-desktop', 'native', 'fp-print'));
 });
 

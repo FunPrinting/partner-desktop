@@ -38,10 +38,12 @@ test('connectState sees a real open and a real closed port', async () => {
   const server = net.createServer((s) => s.destroy());
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const { port } = server.address();
-  assert.equal(await connectState('127.0.0.1', port, 500), 'open');
+  assert.equal((await connectState('127.0.0.1', port, 500)).state, 'open');
   await new Promise((r) => server.close(r));
-  assert.equal(await connectState('127.0.0.1', port, 500), 'closed');
-  assert.equal(await connectState('no-such-host.invalid', 631, 500), 'unresolved');
+  const closed = await connectState('127.0.0.1', port, 500);
+  assert.equal(closed.state, 'closed'); // ECONNREFUSED: something is there and said no
+  assert.equal(closed.code, 'ECONNREFUSED');
+  assert.equal((await connectState('no-such-host.invalid', 631, 500)).state, 'unresolved');
 });
 
 function registryWith(printers, reach) {
@@ -64,6 +66,35 @@ test('a network printer that does not answer is shown offline even if the OS say
   assert.equal(byName.Net.status.state, 'unreachable');
   assert.equal(byName.Net.status.message, 'gone');
   assert.equal(byName.Usb.status.online, true);
+});
+
+test('a check the system blocked is reported as blocked, not as a printer that is off', async () => {
+  const blocked = createReach({ connect: async () => ({ state: 'blocked', code: 'EHOSTUNREACH' }) });
+  assert.deepEqual(await blocked({ uri: 'ipp://10.0.0.2/ipp/print' }), { blocked: true, code: '631:EHOSTUNREACH' });
+  const reg = registryWith([{ id: 'n3', name: 'Net', displayName: 'Net', isDefault: true, uri: 'ipp://10.0.0.2/x', status: { online: true } }], blocked);
+  await reg.refresh();
+  const snap = reg.snapshot();
+  assert.equal(snap.printers[0].status.online, true);
+  assert.equal(snap.networkBlocked, true);
+});
+
+test('a printer that has just printed stays ready even if a check gets no answer', async () => {
+  const reg = registryWith([{ id: 'n4', name: 'Net', displayName: 'Net', isDefault: true, uri: 'ipp://10.0.0.2/x', status: { online: true } }], async () => ({ reachable: false, message: 'gone' }));
+  await reg.refresh();
+  assert.equal(reg.snapshot().printers[0].status.online, false);
+  reg.notePrinted('Net');
+  assert.equal(reg.snapshot().printers[0].status.online, true); // cleared at once
+  await reg.refresh();
+  assert.equal(reg.snapshot().printers[0].status.online, true); // and for the next 15 minutes
+});
+
+test('the check log says each change once', async () => {
+  const lines = [];
+  const r = createReach({ connect: async () => ({ state: 'closed', code: 'ETIMEDOUT' }), log: (m) => lines.push(m) });
+  await r({ name: 'P', uri: 'ipp://10.0.0.2/x' });
+  await r({ name: 'P', uri: 'ipp://10.0.0.2/x' });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /P \(ipp:\/\/10\.0\.0\.2\/x\): no answer 631:ETIMEDOUT/);
 });
 
 test('a throwing reachability check never takes a printer offline', async () => {

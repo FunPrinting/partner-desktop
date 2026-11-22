@@ -54,7 +54,7 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
   const { createReach } = require('./discovery/reach');
   const registry = createRegistry({
     engine,
-    reach: createReach(),
+    reach: createReach({ log: (m) => console.log(m) }),
     store: {
       get: () => prefs.get().printers || {},
       set: (value) => prefs.set({ printers: value }),
@@ -84,6 +84,7 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
       const request = buildRequest({ pageSize: 'A4', color: colour ? 'color' : 'bw', sided: 'single', copies: 1 }, { pageCount: 1 });
       const sent = await sendRequest(engine, { printer: printer.name, sourcePath: file, request, title: 'FunPrinting test page' });
       await trackRuns(engine, printer.name, sent, { onUpdate: (u) => onStatus({ state: u.state === 'ok' ? 'printing' : u.state, reason: u.reason, printer: printer.name, fileName: 'Test page', status: u.reason || 'Printing the test page…' }) });
+      registry.notePrinted(printer.name);
       // A printer we could only estimate is switched on once it has printed a test page
       if (registry.snapshot().printers.find((p) => p.id === printerId)?.needsTest) {
         registry.setNeedsTest(printerId, false);

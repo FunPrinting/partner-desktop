@@ -137,7 +137,17 @@ function createCupsEngine({ ipp = defaultIpp, run = defaultRun, ippOptions = {},
     name: 'cups',
 
     async listPrinters() {
-      const [all, def] = await Promise.all([ipp.getPrinters(ippOptions), defaultPrinter()]);
+      let all;
+      let def;
+      try {
+        [all, def] = await Promise.all([ipp.getPrinters(ippOptions), defaultPrinter()]);
+      } catch (err) {
+        const code = err.code || (err.errors && err.errors[0] && err.errors[0].code);
+        if (code === 'ECONNREFUSED' || code === 'ENOENT') {
+          throw new PrintError('The printing system (CUPS) is not running on this computer. Turn on printing in the system settings, or install CUPS.', CODES.DRIVER_FAILED);
+        }
+        throw new PrintError(`Could not read the printers: ${err.message || code}`, CODES.DRIVER_FAILED);
+      }
       return all.map((a) => printerFrom(a, def)).filter((p) => p.name);
     },
 

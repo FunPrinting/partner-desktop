@@ -30,8 +30,23 @@ jobs:
         timeout-minutes: 8
         if: matrix.os == 'windows-latest'
         run: npm run smoke:add
+      - name: Start the printing system (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          sudo launchctl enable system/org.cups.cupsd || true
+          sudo launchctl kickstart -k system/org.cups.cupsd || true
+          sleep 2
+          lpstat -r || true
+      - name: Start the printing system and a virtual display (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cups cups-ipp-utils xvfb
+          sudo systemctl start cups
+          lpstat -r
       - name: Package the app and check the installed build sees printers
         timeout-minutes: 15
+        shell: bash
         run: |
           npx electron-builder --dir --publish never
-          npm run check:packaged
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a npm run check:packaged; else npm run check:packaged; fi

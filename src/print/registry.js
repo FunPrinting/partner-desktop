@@ -14,6 +14,9 @@ const { EventEmitter } = require('node:events');
  * - First run: the system default printer is enabled. A printer chosen in the older app
  *   version (`legacyPrinterName`) is enabled instead.
  */
+/** A job that finished on a printer proves it is on for this long. */
+const PRINTED_PROVES_ON_MS = 15 * 60_000;
+
 function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 60_000, now = () => Date.now(), reach = null }) {
   const events = new EventEmitter();
   let printers = new Map(); // id -> entry
@@ -21,6 +24,8 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   let refreshing = null;
   let lastError = null;
   let lastRefreshAt = null;
+  const lastPrinted = new Map(); // printer name -> when a job last finished on it
+  let networkBlocked = false; // printer checks were refused by the system
   let moves = []; // set-up printers that stopped answering, with where they now are
   let available = []; // found on the network, not set up here (set by discovery/finder.js)
   let scanState = { scanning: false, lastScanAt: 0, error: null };
@@ -44,6 +49,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
       })),
       available,
       moves,
+      networkBlocked,
       scan: scanState,
       lastRefreshAt,
       lastError,
@@ -86,13 +92,19 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
       return snapshot();
     }
     // A network printer that is switched off, or has a new IP address, does not answer
+    // ...but a printer that has just printed is on, whatever a check says, and a check the
+    // system blocked (macOS Local Network permission, a firewall) proves nothing.
     if (reach) {
+      let blocked = false;
       await Promise.all(
         list.map(async (p) => {
           const answer = await reach(p).catch(() => null);
-          if (answer && answer.reachable === false) p.status = { ...(p.status || {}), online: false, state: 'unreachable', message: answer.message };
+          if (answer && answer.blocked) blocked = true;
+          const printedRecently = now() - (lastPrinted.get(p.name) || 0) < PRINTED_PROVES_ON_MS;
+          if (answer && answer.reachable === false && !printedRecently) p.status = { ...(p.status || {}), online: false, state: 'unreachable', message: answer.message };
         })
       );
+      networkBlocked = blocked;
     }
     const next = new Map();
     for (const p of list) {
@@ -158,6 +170,16 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     timer = null;
   }
 
+  /** A job finished on this printer: it is on. Clears an "unreachable" shown by a check. */
+  function notePrinted(name) {
+    lastPrinted.set(name, now());
+    for (const p of printers.values()) {
+      if (p.name === name && p.status && p.status.state === 'unreachable') {
+        p.status = { online: true, state: 'idle', reasons: [] };
+        events.emit('changed', snapshot());
+      }
+    }
+  }
   /** Remember which found network device (and URL) a queue was set up from. */
   function setSource(id, source, sourceUrl) {
     const p = printers.get(id);
@@ -192,7 +214,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   function setScanError(error) {
     scanState = { ...scanState, error };
   }
-  return { setMoves, setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  return { notePrinted, setMoves, setSource, setNeedsTest, setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
-module.exports = { createRegistry };
+module.exports = { createRegistry, PRINTED_PROVES_ON_MS };
