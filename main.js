@@ -89,6 +89,8 @@ if (!app.requestSingleInstanceLock()) {
     });
     printService.registry.events.on('changed', (printers) => send('printers-changed', printers));
 
+    const printerReporter = require('./src/main/printerReport').createPrinterReporter({ registry: printService.registry });
+
     const wireWindow = (win) => {
       // "Keep printing when the window is closed": hide instead of closing
       win.on('close', (event) => {
@@ -106,6 +108,8 @@ if (!app.requestSingleInstanceLock()) {
     const goOnline = () => {
       connection.connect();
       jobSync.start();
+      printerReporter.reset();
+      printerReporter.schedule();
     };
 
     connection.setHandlers({
