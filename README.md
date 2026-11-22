@@ -71,9 +71,9 @@ Same design tokens as the mobile app: neutral surfaces, brand indigo on content 
 | `src/main/prefs.js`, `tray.js` | Options; optional tray icon |
 | `src/main/session.js`, `tokenStore.js` | Sign-in, refresh, API calls, token storage |
 | `src/main/connection.js` | Socket to the relay (change notifications only) |
-| `src/main/jobSync.js` | Job API → local print queue, reports, heartbeats |
+| `src/main/jobSync.js` | Job API → print runner, reports, heartbeats |
 | `src/main/ipcHandlers.js`, `preload.js` | IPC; the window calls the partner API through the main process |
 | `src/main/errorReporter.js` | Error reports |
-| `src/queue/` | Local print queue (saved to `print-queue.json`) |
-| `src/printer/` | Printing (Chrome, SumatraPDF, Windows spooler, `lp` on macOS/Linux; mixed colour) |
+| `src/print/` | Print engine: router, runner, tracker, printer registry. Windows uses the `native/fp-print` add-on (PDFium to GDI); macOS and Linux use CUPS. Mixed colour is split into same-colour PDFs |
+| `native/fp-print/` | Rust add-on for Windows printing |
 | `src/ui/` | Window scripts: `app.js` (shell), `jobs.js`, `orders.js`, `shop.js`, `settings.js`, `orderWindow.js`, `util.js`, `styles.css` |

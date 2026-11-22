@@ -37,6 +37,7 @@ function initSettings({ getPrefs, setPrefs }) {
           ${icon('printer')}
           <div class="row-main"><div class="row-title">${esc(p.displayName || p.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${badges(p)}</div></div>
           ${bwBtn}
+          <button class="btn btn-plain" data-test="${esc(p.id)}">Test page</button>
           <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''}><span></span></label>
         </div>`;
       })
@@ -71,6 +72,17 @@ function initSettings({ getPrefs, setPrefs }) {
     setPrinters(await window.electronAPI.updatePrinter(input.dataset.printer, { enabled: input.checked }));
   });
   printersList.addEventListener('click', async (e) => {
+    const test = e.target.closest('[data-test]');
+    if (test) {
+      test.disabled = true;
+      test.textContent = 'Printing…';
+      const r = await window.electronAPI.testPrinter(test.dataset.test);
+      test.disabled = false;
+      test.textContent = 'Test page';
+      if (r.ok) toast(`Test page printed in ${r.seconds} s.`);
+      else await ask({ title: 'Test page failed', message: r.error, cancel: null });
+      return;
+    }
     const btn = e.target.closest('[data-bw]');
     if (!btn) return;
     const on = btn.getAttribute('aria-pressed') !== 'true';

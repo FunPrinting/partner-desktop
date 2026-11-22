@@ -128,6 +128,14 @@ function registerIpcHandlers(getMainWindow, { onSignedIn, printService }) {
     await printService.registry.refresh();
     return printService.registry.snapshot();
   });
+  handle('printers:test', async (id) => {
+    try {
+      const { ms } = await printService.printTestPage(String(id));
+      return { ok: true, seconds: Math.round(ms / 100) / 10 };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
   handle('printers:update', (id, patch) => {
     if (typeof id !== 'string') throw new Error('Unknown printer');
     const p = patch && typeof patch === 'object' ? patch : {};

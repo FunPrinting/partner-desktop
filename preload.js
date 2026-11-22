@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   printAgain: (order) => ipcRenderer.invoke('queue:print-again', order),
   getPrinters: () => ipcRenderer.invoke('printers:list'),
   refreshPrinters: () => ipcRenderer.invoke('printers:refresh'),
+  testPrinter: (id) => ipcRenderer.invoke('printers:test', id),
   updatePrinter: (id, patch) => ipcRenderer.invoke('printers:update', id, patch),
   onPrintersChanged: (cb) => listen('printers-changed', cb),
   // Preferences

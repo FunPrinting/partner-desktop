@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     permissions:
       contents: write
 
@@ -49,6 +49,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build Linux App
+        if: matrix.os == 'ubuntu-latest'
+        run: npx electron-builder --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v2
         with:
@@ -57,6 +62,7 @@ jobs:
           files: |
             dist/*.exe
             dist/*.dmg
+            dist/*.AppImage
             dist/*.zip
             dist/*.yml
             dist/*.blockmap

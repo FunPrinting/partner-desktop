@@ -59,7 +59,32 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
   const cache = createCache({ dir: path.join(dataDir, 'print-cache') });
   const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
 
+  /** Prints a test page on one printer; resolves with how long it took until the printer finished. */
+  async function printTestPage(printerId) {
+    const fs = require('node:fs/promises');
+    const { buildRequest } = require('./request');
+    const { sendRequest } = require('./sendRequest');
+    const { trackRuns } = require('./tracker');
+    const { renderTestPage } = require('./testPage');
+    const printer = registry.get(printerId);
+    if (!printer) throw new Error('Unknown printer');
+    const colour = Boolean(printer.caps?.color);
+    await fs.mkdir(path.join(dataDir, 'print-work'), { recursive: true });
+    const file = path.join(dataDir, 'print-work', `test-${Date.now()}.pdf`);
+    await fs.writeFile(file, await renderTestPage({ printerName: printer.displayName || printer.name, colour }));
+    const started = Date.now();
+    try {
+      const request = buildRequest({ pageSize: 'A4', color: colour ? 'color' : 'bw', sided: 'single', copies: 1 }, { pageCount: 1 });
+      const sent = await sendRequest(engine, { printer: printer.name, sourcePath: file, request, title: 'FunPrinting test page' });
+      await trackRuns(engine, printer.name, sent, { onUpdate: (u) => onStatus({ state: u.state === 'ok' ? 'printing' : u.state, reason: u.reason, printer: printer.name, fileName: 'Test page', status: u.reason || 'Printing the test page…' }) });
+      return { ms: Date.now() - started };
+    } finally {
+      await fs.rm(file, { force: true });
+    }
+  }
+
   return {
+    printTestPage,
     engine,
     registry,
     cache,
