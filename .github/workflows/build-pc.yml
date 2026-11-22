@@ -32,7 +32,7 @@ jobs:
         run: npm ci || npm install
 
       - name: Bump Version
-        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
       - name: Build native print engine (Windows)
         if: matrix.os == 'windows-latest'
         run: npm run build:native
