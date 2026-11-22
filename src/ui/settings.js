@@ -17,6 +17,11 @@ function initSettings({ getPrefs, setPrefs }) {
     if (!c) return '';
     const out = [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided')];
     if ((c.media || []).includes('A3')) out.push(pill('A3'));
+    // Security: encrypted (ipps://, https://), not encrypted (ipp://, socket://, lpd://), or USB
+    const scheme = (p.uri || '').split(':')[0].toLowerCase();
+    if (scheme === 'ipps' || scheme === 'https') out.push(pill('Encrypted', 'success'));
+    else if (scheme === 'ipp' || scheme === 'socket' || scheme === 'lpd') out.push(pill('Not encrypted', 'warning'));
+    else if (scheme === 'usb') out.push(pill('USB'));
     return out.join(' ');
   }
 
@@ -109,6 +114,8 @@ function initSettings({ getPrefs, setPrefs }) {
         .map((f) => {
           const c = f.caps;
           const abilities = c ? [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided'), (c.media || []).includes('A3') ? pill('A3') : ''].join(' ') : '';
+          // Security indicator based on the protocol used
+          const securityPill = f.security === 'encrypted' ? pill('Encrypted', 'success') : f.security === 'not-encrypted' ? pill('Not encrypted', 'warning') : '';
           const where = f.address ? `Network · ${f.address}` : 'Network';
           const sub = f.setUpAs
             ? `Already set up on this computer as "${f.setUpAs}" · ${where}`
@@ -121,7 +128,7 @@ function initSettings({ getPrefs, setPrefs }) {
           const action = f.setUpAs ? pill('Set up', 'success') : `<button class="btn btn-primary" data-add="${esc(f.id)}" ${busy || addingId ? 'disabled' : ''}>${busy ? 'Adding…' : 'Add'}</button>`;
           return `<div class="row">
           ${icon('printer')}
-          <div class="row-main"><div class="row-title">${esc(f.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${abilities}</div>${addErrors[f.id] ? `<div class="row-sub" style="color:var(--danger,#c0392b)">${esc(addErrors[f.id])}</div>` : ''}</div>
+          <div class="row-main"><div class="row-title">${esc(f.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${abilities} ${securityPill}</div>${addErrors[f.id] ? `<div class="row-sub" style="color:var(--danger,#c0392b)">${esc(addErrors[f.id])}</div>` : ''}</div>
           ${action}
         </div>`;
         })

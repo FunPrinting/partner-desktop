@@ -38,6 +38,8 @@ function createFinder({ registry, canMove = false, log = () => {}, sweep = defau
           caps: d.probe.caps,
           status: d.probe.status,
           error: d.probe.error,
+          security: d.probe.security,
+          fingerprint: d.probe.fingerprint,
           setUpAs: setUp ? setUp.displayName || setUp.name : undefined,
         };
       }),
