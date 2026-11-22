@@ -61,7 +61,7 @@ function initJobs() {
     // Notes
     const n = [];
     if (s.deviceId) {
-      if (!s.printerName) n.push(banner('info', 'Choose a printer to start printing', 'Open Settings and select the printer this computer should use.'));
+      if (!s.printersReady) n.push(banner('info', 'No printer is ready', 'Open Settings and switch on the printers this computer should use. Jobs are only taken while one is ready.'));
       if (s.paused) n.push(banner('warning', 'Printing is paused', 'New jobs wait in your shop\'s queue until you resume.'));
       if (s.cooldownUntil) n.push(banner('danger', 'The last job failed', `It went back to your queue. The next job starts in ${timeLeft(s.cooldownUntil)}; check the printer.`));
       if (s.lastError) n.push(banner('warning', 'Can\'t reach FunPrinting', `${s.lastError}. Retrying automatically.`));
@@ -81,7 +81,7 @@ function initJobs() {
         jobCard(job, {
           tone: 'primary',
           badge: 'Printing',
-          note: `<div class="job-meta">File ${Math.min(done + 1, mine.files.length)} of ${mine.files.length}${printMessage ? ` · ${esc(printMessage)}` : ''}</div><div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="width:${Math.max(pct, 4)}%"></div></div>`,
+          note: `<div class="job-meta">File ${Math.min(done + 1, mine.files.length)} of ${mine.files.length}${(s.activity || printMessage) ? ` · ${esc(s.activity || printMessage)}` : ''}</div><div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="width:${Math.max(pct, 4)}%"></div></div>`,
         })
       );
     } else {

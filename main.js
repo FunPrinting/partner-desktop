@@ -10,8 +10,7 @@
  *   src/main/errorReporter.js errors -> web app error log
  *   src/main/ipcHandlers.js   IPC for the windows
  *   src/main/window.js, orderWindow.js, updater.js, tray.js
- *   src/queue/                local print queue (one file at a time)
- *   src/printer/              printing
+ *   src/print/                print engine (Windows: native add-on, macOS/Linux: CUPS)
  */
 const { app, BrowserWindow, nativeTheme, session: electronSession } = require('electron');
 const { createWindow, getMainWindow } = require('./src/main/window');
@@ -47,7 +46,8 @@ if (!app.requestSingleInstanceLock()) {
     const session = require('./src/main/session');
     const connection = require('./src/main/connection');
     const jobSync = require('./src/main/jobSync');
-    const queue = require('./src/queue/queueManager');
+    const { createPrintService } = require('./src/print/service');
+    const { powerMonitor } = require('electron');
     const tray = require('./src/main/tray');
     const { initAutoUpdater } = require('./src/main/updater');
     const { registerIpcHandlers } = require('./src/main/ipcHandlers');
@@ -71,13 +71,23 @@ if (!app.requestSingleInstanceLock()) {
         app.setLoginItemSettings({ openAtLogin: p.openAtLogin });
       }
       if ('keepRunningInTray' in changed) (p.keepRunningInTray ? tray.enableTray(trayActions) : tray.disableTray());
-      if ('printerName' in changed) jobSync.setPrinter(p.printerName);
     };
 
     const send = (channel, data) => {
       const win = getMainWindow();
       if (win && !win.isDestroyed()) win.webContents.send(channel, data);
     };
+
+    const printService = createPrintService({
+      prefs,
+      dataDir: app.getPath('userData'),
+      powerMonitor,
+      onStatus: (status) => {
+        jobSync.onRunnerStatus(status);
+        send('print_status', status);
+      },
+    });
+    printService.registry.events.on('changed', (printers) => send('printers-changed', printers));
 
     const wireWindow = (win) => {
       // "Keep printing when the window is closed": hide instead of closing
@@ -118,7 +128,7 @@ if (!app.requestSingleInstanceLock()) {
         send('jobs-changed', snapshot);
         tray.refreshTray(trayActions);
       },
-      { newOrder: (job) => send('new-order', { jobId: job.jobId, orderId: job.orderId }) }
+      { newOrder: (job) => send('new-order', { jobId: job.jobId, orderId: job.orderId }), printService }
     );
 
     applyPrefs(prefs.get());
@@ -127,12 +137,10 @@ if (!app.requestSingleInstanceLock()) {
       send('prefs-changed', p);
     });
 
-    registerIpcHandlers(getMainWindow, { onSignedIn: goOnline });
+    registerIpcHandlers(getMainWindow, { onSignedIn: goOnline, printService });
+    printService.start().catch((err) => errorReporter.reportError(err));
     initAutoUpdater(getMainWindow, {
-      busy: () => {
-        const q = queue.getQueueStatus();
-        return q.total > 0 || Boolean(jobSync.snapshot().current);
-      },
+      busy: () => Boolean(jobSync.snapshot().current),
     });
 
     if (session.restore().signedIn) goOnline();

@@ -32,14 +32,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onJobsChanged: (cb) => listen('jobs-changed', cb),
   onPrintStatus: (cb) => listen('print_status', cb),
 
-  // Local queue
-  getQueue: () => ipcRenderer.invoke('queue:get'),
+  // Print again, printers
   printAgain: (order) => ipcRenderer.invoke('queue:print-again', order),
-
-  // Printers
   getPrinters: () => ipcRenderer.invoke('printers:list'),
-  setActivePrinter: (name) => ipcRenderer.send('printers:set-active', name),
-
+  refreshPrinters: () => ipcRenderer.invoke('printers:refresh'),
+  updatePrinter: (id, patch) => ipcRenderer.invoke('printers:update', id, patch),
+  onPrintersChanged: (cb) => listen('printers-changed', cb),
   // Preferences
   getPrefs: () => ipcRenderer.invoke('prefs:get'),
   setPrefs: (patch) => ipcRenderer.invoke('prefs:set', patch),

@@ -195,7 +195,7 @@ async function doRefresh() {
   const sent = session.refreshToken;
   let result;
   try {
-    result = await postToken({ grant_type: 'refresh_token', refresh_token: sent });
+    result = await postToken({ grant_type: 'refresh_token', refresh_token: sent, app_version: app.getVersion() });
   } catch (err) {
     // Offline or server down: keep the session and try again later
     throw new Error(`Could not refresh sign-in: ${err.message}`);
@@ -251,6 +251,7 @@ async function apiFetch(path, { method = 'GET', body, timeoutMs = REQUEST_TIMEOU
       method,
       headers: {
         Authorization: `Bearer ${token}`,
+        'X-App-Version': app.getVersion(),
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,

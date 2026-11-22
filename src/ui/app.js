@@ -87,8 +87,8 @@
   });
   window.addEventListener('fp:jobs', (e) => {
     const s = e.detail || {};
-    const name = s.printerName;
-    $('printer-status').innerHTML = `${icon('printer', 'icon-sm')}<span>${esc(name ? (s.paused ? `${name} · paused` : name) : 'No printer selected')}</span>`;
+    const text = !s.printersReady ? 'No printer ready' : s.paused ? 'Printing paused' : 'Printer ready';
+    $('printer-status').innerHTML = `${icon('printer', 'icon-sm')}<span>${esc(text)}</span>`;
   });
 
   // ── Preferences ─────────────────────────────────────────────────────
@@ -142,7 +142,7 @@
       pages.settings = initSettings({ getPrefs, setPrefs });
       applyPrefs();
       renderSession(await window.electronAPI.getSession());
-      // Pick up the printer (or the system default) even before Settings is opened
+      // Load the printer list even before Settings is opened
       pages.settings.loadPrinters();
     });
 })();

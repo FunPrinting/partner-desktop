@@ -8,7 +8,6 @@
 const { ipcMain } = require('electron');
 const session = require('./session');
 const jobSync = require('./jobSync');
-const queue = require('../queue/queueManager');
 const { openOrderWindow } = require('./orderWindow');
 const { checkForUpdates } = require('./updater');
 const { reportError } = require('./errorReporter');
@@ -37,7 +36,7 @@ function on(channel, fn) {
   });
 }
 
-function registerIpcHandlers(getMainWindow, { onSignedIn }) {
+function registerIpcHandlers(getMainWindow, { onSignedIn, printService }) {
   // ── Session ──────────────────────────────────────────────────────────
 
   handle('session:get', () => session.publicState());
@@ -97,60 +96,45 @@ function registerIpcHandlers(getMainWindow, { onSignedIn }) {
     return jobSync.snapshot();
   });
 
-  // ── Local queue ──────────────────────────────────────────────────────
-
-  handle('queue:get', () =>
-    queue.getQueueStatus().jobs.map((e) => ({
-      id: e.id,
-      jobId: e.job?.jobId,
-      orderId: e.job?.orderId,
-      fileName: e.job?.fileName,
-      status: e.status,
-      attempts: e.attempts,
-      error: e.error,
-    }))
-  );
-
-  // Print an order's files again on this computer (no job status change)
+  // ── Print again (this computer only, no job status change) ──────────
   handle('queue:print-again', (order) => {
-    const urls = Array.isArray(order?.fileURLs) && order.fileURLs.length ? order.fileURLs : order?.fileURL ? [order.fileURL] : [];
-    const safe = urls.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
-    if (!safe.length) return { ok: false, error: 'This order has no files' };
-    const opts = order.printingOptions || {};
-    safe.forEach((url, i) => {
+    const printUrls = Array.isArray(order?.printURLs) ? order.printURLs : [];
+    const fileUrls = Array.isArray(order?.fileURLs) && order.fileURLs.length ? order.fileURLs : order?.fileURL ? [order.fileURL] : [];
+    const opts = order?.printingOptions || {};
+    const files = [];
+    fileUrls.forEach((url, i) => {
+      const printUrl = printUrls[i] || (/\.pdf(\?|$)/i.test(String(url)) ? url : '');
+      if (typeof printUrl !== 'string' || !/^https:\/\//i.test(printUrl)) return;
       const fo = opts.fileOptions?.[i] || {};
-      queue.addToQueue(
-        {
-          localOnly: true,
-          orderId: String(order.orderId || ''),
-          fileUrl: url,
-          fileName: String(order.originalFileNames?.[i] || order.originalFileName || `File ${i + 1}`).slice(0, 200),
-          fileType: String(order.fileTypes?.[i] || order.fileType || 'pdf').split('/').pop(),
-          printingOptions: {
-            pageSize: fo.pageSize || opts.pageSize || 'A4',
-            color: fo.color || opts.color || 'bw',
-            sided: fo.sided || opts.sided || 'single',
-            copies: fo.copies || opts.copies || 1,
-          },
-        },
-        0
-      );
+      files.push({
+        url,
+        printUrl,
+        name: String(order.originalFileNames?.[i] || order.originalFileName || `File ${i + 1}`).slice(0, 200),
+        pageSize: fo.pageSize || opts.pageSize || 'A4',
+        color: fo.color || opts.color || 'bw',
+        sided: fo.sided || opts.sided || 'single',
+        copies: fo.copies || opts.copies || 1,
+        colorPages: Array.isArray(fo.colorPages) ? fo.colorPages : [],
+      });
     });
-    return { ok: true, files: safe.length };
+    if (!files.length) return { ok: false, error: 'This order has no files ready to print' };
+    const job = { jobId: `local-${Date.now()}`, orderId: String(order.orderId || ''), files };
+    printService.runner.runJob(job, {}).catch((err) => reportError(err, { context: { kind: 'print-again' } }));
+    return { ok: true, files: files.length };
   });
-
   // ── Printers ─────────────────────────────────────────────────────────
-
-  handle('printers:list', async () => {
-    const win = getMainWindow();
-    return win ? win.webContents.getPrintersAsync() : [];
+  handle('printers:list', () => printService.registry.snapshot());
+  handle('printers:refresh', async () => {
+    await printService.registry.refresh();
+    return printService.registry.snapshot();
   });
-
-  on('printers:set-active', (printerName) => {
-    prefs.set({ printerName: typeof printerName === 'string' && printerName ? printerName : null });
-    console.log(`🖨️ Active printer: ${printerName}`);
+  handle('printers:update', (id, patch) => {
+    if (typeof id !== 'string') throw new Error('Unknown printer');
+    const p = patch && typeof patch === 'object' ? patch : {};
+    const snap = printService.registry.update(id, { enabled: p.enabled, preferredBw: p.preferredBw });
+    jobSync.sync('printers changed').catch(() => undefined);
+    return snap;
   });
-
   // ── Preferences ──────────────────────────────────────────────────────
 
   handle('prefs:get', () => prefs.get());
@@ -177,7 +161,6 @@ function registerIpcHandlers(getMainWindow, { onSignedIn }) {
   handle('clear-data', async () => {
     await jobSync.releaseCurrent();
     await session.signOut();
-    queue.clearQueue();
     return { ok: true };
   });
 }

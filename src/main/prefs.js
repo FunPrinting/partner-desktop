@@ -10,7 +10,8 @@ const { app } = require('electron');
 const FILE = path.join(app.getPath('userData'), 'prefs.json');
 
 const DEFAULTS = {
-  printerName: null, // chosen printer; jobs are only taken when set
+  printerName: null, // the printer chosen in the earlier app version (migrated into `printers`)
+  printers: {}, // per printer, by stable id: { enabled, preferredBw, name } (src/print/registry.js)
   theme: 'system', // system | light | dark
   notifyNewOrders: true, // system notification for orders to accept
   soundNewOrders: false, // chime for orders to accept
@@ -23,6 +24,7 @@ const DEFAULTS = {
 
 const TYPES = {
   printerName: (v) => v === null || (typeof v === 'string' && v.length <= 300),
+  printers: (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && JSON.stringify(v).length < 100_000,
   theme: (v) => v === 'system' || v === 'light' || v === 'dark',
 };
 
@@ -49,7 +51,7 @@ function get() {
 function set(patch) {
   const changed = {};
   for (const [key, value] of Object.entries(patch || {})) {
-    if (valid(key, value) && prefs[key] !== value) changed[key] = value;
+    if (valid(key, value) && JSON.stringify(prefs[key]) !== JSON.stringify(value)) changed[key] = value;
   }
   if (!Object.keys(changed).length) return get();
   prefs = { ...prefs, ...changed };

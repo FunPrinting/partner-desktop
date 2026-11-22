@@ -11,64 +11,73 @@ function initSettings({ getPrefs, setPrefs }) {
 
   // ── Printers ────────────────────────────────────────────────────────
 
-  function statusText(p) {
-    // Electron reports a numeric status on some systems; 0 means ready
-    if (typeof p.status === 'number' && p.status !== 0) return 'May be offline or busy';
-    return p.isDefault ? 'System default' : '';
+  function badges(p) {
+    const c = p.caps;
+    if (!c) return '';
+    const out = [c.color ? pill('Colour', 'primary') : pill('B&W only'), c.duplex ? pill('Double-sided') : pill('Single-sided')];
+    if ((c.media || []).includes('A3')) out.push(pill('A3'));
+    return out.join(' ');
   }
 
   function renderPrinters() {
-    const active = getPrefs().printerName;
     if (!printers.length) {
       printersList.innerHTML = `<div class="row"><div class="row-main"><div class="row-title">No printers found</div><div class="row-sub">Connect a printer and add it in your system settings, then click Refresh.</div></div></div>`;
       return;
     }
+    const enabledCount = printers.filter((p) => p.enabled).length;
     printersList.innerHTML = printers
       .map((p) => {
-        const checked = p.name === active;
-        const sub = statusText(p);
-        return `<button class="printer" role="radio" aria-checked="${checked}" data-printer="${esc(p.name)}">
-          <span class="radio"></span>
+        const offline = p.status && p.status.online === false;
+        const sub = offline ? p.status.message || 'Not ready' : p.status?.message || (p.isDefault ? 'System default' : 'Ready');
+        const bwBtn =
+          p.enabled && enabledCount > 1 && p.caps?.color
+            ? `<button class="btn btn-plain" data-bw="${esc(p.id)}" aria-pressed="${p.preferredBw}">${p.preferredBw ? 'Preferred for B&amp;W ✓' : 'Prefer for B&amp;W'}</button>`
+            : '';
+        return `<div class="row">
           ${icon('printer')}
-          <span class="row-main"><span class="row-title" style="display:block">${esc(p.displayName || p.name)}</span>${sub ? `<span class="row-sub" style="display:block">${esc(sub)}</span>` : ''}</span>
-          ${checked ? pill('In use', 'primary') : ''}
-        </button>`;
+          <div class="row-main"><div class="row-title">${esc(p.displayName || p.name)}</div><div class="row-sub">${esc(sub)}</div><div class="row-sub">${badges(p)}</div></div>
+          ${bwBtn}
+          <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''}><span></span></label>
+        </div>`;
       })
       .join('');
   }
 
-  async function loadPrinters() {
-    printersList.innerHTML = `<div class="row"><div class="row-main muted">Looking for printers…</div></div>`;
-    try {
-      printers = (await window.electronAPI.getPrinters()) || [];
-    } catch {
-      printers = [];
-    }
-    let active = getPrefs().printerName;
-    // From the earlier app version
-    const legacy = localStorage.getItem('activePrinterName');
-    if (!active && legacy) {
-      active = legacy;
-      localStorage.removeItem('activePrinterName');
-    }
-    // The chosen printer was removed: fall back to the system default
-    if (active && !printers.some((p) => p.name === active)) active = null;
-    if (!active) active = (printers.find((p) => p.isDefault) || printers[0] || {}).name || null;
-    if (active !== getPrefs().printerName) await setPrefs({ printerName: active });
+  function setPrinters(snap) {
+    printers = (snap && snap.printers) || [];
     renderPrinters();
   }
 
-  printersList.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-printer]');
-    if (!btn) return;
-    const p = printers.find((x) => x.name === btn.dataset.printer);
-    if (p && typeof p.status === 'number' && p.status !== 0) {
-      const go = await ask({ title: `Use ${p.displayName || p.name}?`, message: 'This printer reports it may be offline, out of paper or busy. Jobs wait and retry until it is ready.', ok: 'Use it' });
-      if (!go) return;
+  async function loadPrinters() {
+    try {
+      setPrinters(await window.electronAPI.getPrinters());
+    } catch {
+      setPrinters(null);
     }
-    window.electronAPI.setActivePrinter(btn.dataset.printer);
+  }
+
+  async function refreshPrinters() {
+    printersList.innerHTML = `<div class="row"><div class="row-main muted">Looking for printers…</div></div>`;
+    try {
+      setPrinters(await window.electronAPI.refreshPrinters());
+    } catch {
+      setPrinters(null);
+    }
+  }
+
+  printersList.addEventListener('change', async (e) => {
+    const input = e.target.closest('[data-printer]');
+    if (!input) return;
+    setPrinters(await window.electronAPI.updatePrinter(input.dataset.printer, { enabled: input.checked }));
   });
-  $('refresh-printers-btn').addEventListener('click', loadPrinters);
+  printersList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-bw]');
+    if (!btn) return;
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    setPrinters(await window.electronAPI.updatePrinter(btn.dataset.bw, { preferredBw: on }));
+  });
+  window.electronAPI.onPrintersChanged(setPrinters);
+  $('refresh-printers-btn').addEventListener('click', refreshPrinters);
 
   // ── Switch options ──────────────────────────────────────────────────
 
@@ -93,7 +102,6 @@ function initSettings({ getPrefs, setPrefs }) {
     $('theme-picker')
       .querySelectorAll('[data-theme]')
       .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === p.theme)));
-    renderPrinters();
   }
 
   // ── Account and app ─────────────────────────────────────────────────

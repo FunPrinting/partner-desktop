@@ -2,9 +2,9 @@
  * Print jobs from the web API (/api/partner/v1/jobs, see FunPrinting-Web
  * docs/PRINT_JOBS.md).
  *
- * The app takes one job at a time: it claims the oldest queued job, puts its
- * files in the local print queue, reports "printing" every 2 minutes (keeps the
- * 5-minute lease), and reports "printed" or "failed" when the files are done.
+ * The app takes one job at a time: it claims the oldest queued job, prints its
+ * files with the print runner (src/print), reports "printing" every 2 minutes (keeps
+ * the 5-minute lease), and reports "printed" or "failed" when the files are done.
  * Taking one job at a time lets several computers share a shop's queue.
  *
  * The job list is fetched on start-up, on every socket (re)connect, when the
@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, Notification } = require('electron');
 const session = require('./session');
-const queue = require('../queue/queueManager');
+const { jobIsPossible } = require('../print/router');
 const { reportError } = require('./errorReporter');
 const prefs = require('./prefs');
 
@@ -29,20 +29,11 @@ const POLL_MS = 60_000;
 const HEARTBEAT_MS = 2 * 60_000;
 const FAILURE_COOLDOWN_MS = 2 * 60_000;
 
-const MIME_EXT = {
-  'application/pdf': 'pdf',
-  'application/msword': 'doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/gif': 'gif',
-  'image/bmp': 'bmp',
-};
-
-// state.current: { job, done: number[], summary?: { orderDetails, customerInfo } }
+// state.current: { job, done: number[], printers: { [fileIndex]: printerName }, order?: partner order (customer, amount) }
 let state = { current: null, pendingReports: [] };
-let running = false; // the current job's files are in the local queue
+let running = false; // the runner is printing the current job
+let print = null; // { registry, runner } from src/print/service.js
+let activity = ''; // what the runner is doing now, for the Jobs page
 let serverJobs = [];
 let lastSyncAt = null;
 let lastError = null;
@@ -52,7 +43,6 @@ let pollTimer = null;
 let heartbeatTimer = null;
 let cooldownUntil = 0;
 let paused = false;
-let printerName = null;
 const notifiedPending = new Set();
 let onChange = () => {};
 let onNewOrder = () => {};
@@ -93,12 +83,13 @@ function snapshot() {
           jobId: cur.job.jobId,
           orderId: cur.job.orderId,
           deliveryNumber: cur.job.deliveryNumber,
-          files: cur.job.files.map((f, i) => ({ name: f.name, done: cur.done.includes(i) })),
+          files: cur.job.files.map((f, i) => ({ name: f.name, done: cur.done.includes(i), printer: cur.printers?.[i] })),
         }
       : null,
+    activity,
     deviceId: session.getDeviceId() || null,
     paused,
-    printerName,
+    printersReady: printersReady(),
     cooldownUntil: cooldownUntil > Date.now() ? cooldownUntil : null,
     lastSyncAt,
     lastError,
@@ -120,72 +111,24 @@ function jobPath(jobId) {
   return `/api/partner/v1/jobs/${encodeURIComponent(jobId)}`;
 }
 
-function report(jobId, status, error) {
+/** Names of the printers that printed the current job's files, for the shop's records. */
+function printersUsed(cur) {
+  return [...new Set(Object.values(cur?.printers || {}))].join(', ');
+}
+
+function report(jobId, status, error, printer) {
   return session.apiFetch(jobPath(jobId), {
     method: 'POST',
     // The printer name lets the shop see where each order was printed
-    body: { action: 'report', status, ...(error ? { error: String(error).slice(0, 500) } : {}), ...(printerName ? { printer: String(printerName).slice(0, 200) } : {}) },
+    body: { action: 'report', status, ...(error ? { error: String(error).slice(0, 500) } : {}), ...(printer ? { printer: String(printer).slice(0, 200) } : {}) },
   });
 }
 
-function extensionFor(file) {
-  const fromName = path.extname(file.name || '').replace('.', '').toLowerCase();
-  if (fromName) return fromName;
-  const mime = String(file.mime || '').toLowerCase();
-  if (MIME_EXT[mime]) return MIME_EXT[mime];
-  if (mime && !mime.includes('/')) return mime.replace('.', '');
-  try {
-    const fromUrl = path.extname(new URL(file.url).pathname).replace('.', '').toLowerCase();
-    if (fromUrl) return fromUrl;
-  } catch {
-    // not a URL we can parse
-  }
-  return 'pdf';
-}
-
-/** One local queue entry per file, in the shape src/printer/printJob.js expects. */
-function queueEntryFor(cur, file, index) {
-  const ext = extensionFor(file);
-  const baseName = file.name || `File ${index + 1}`;
-  const isLast = index === cur.job.files.length - 1;
-  return {
-    jobId: cur.job.jobId,
-    fileIndex: index,
-    orderId: cur.job.orderId,
-    deliveryNumber: cur.job.deliveryNumber,
-    fileUrl: file.url,
-    fileName: path.extname(baseName) ? baseName : `${baseName}.${ext}`,
-    fileType: ext,
-    printingOptions: {
-      pageSize: file.pageSize || 'A4',
-      color: file.color || 'bw',
-      sided: file.sided || 'single',
-      copies: file.copies || 1,
-      pageCount: file.pages,
-      // Pages not listed as colour print in B&W
-      pageColors: file.color === 'mixed' ? { colorPages: file.colorPages || [], bwPages: [] } : undefined,
-    },
-    // The order summary sheet prints once, on top of the last file (optional)
-    ...(isLast && cur.summary && prefs.get().printSummarySheet ? cur.summary : {}),
-  };
-}
-
-async function fetchSummary(orderId) {
+/** The order (customer, amount, due date) for the cover sheet. */
+async function fetchOrder(orderId) {
   try {
     const res = await session.apiFetch(`/api/partner/orders/${encodeURIComponent(orderId)}`);
-    const order = res.ok ? res.data.order : null;
-    if (!order || !order.customerInfo) return undefined;
-    return {
-      orderDetails: {
-        orderType: order.orderType,
-        printingOptions: order.printingOptions,
-        pages: order.printingOptions?.pageCount,
-        amount: order.amount,
-        serviceOptions: order.printingOptions?.serviceOptions,
-        expectedDelivery: order.expectedDate,
-      },
-      customerInfo: { name: order.customerInfo.name, phone: order.customerInfo.phone, email: order.customerInfo.email },
-    };
+    return res.ok && res.data.order?.customerInfo ? res.data.order : undefined;
   } catch {
     return undefined;
   }
@@ -213,21 +156,32 @@ function stopHeartbeat() {
   heartbeatTimer = null;
 }
 
-function removeLocalFiles(jobId) {
-  queue.removeWhere((e) => e.job && e.job.jobId === jobId);
+function stopPrinting(jobId) {
+  print?.runner.cancel(jobId);
 }
 
-/** Put the current job's remaining files in the local queue (once). */
+/** Start printing the current job's remaining files (once). */
 function ensureRunning(serverJob) {
   const cur = state.current;
   cur.job = { ...cur.job, ...serverJob };
   if (running) return;
   running = true;
-  cur.job.files.forEach((file, i) => {
-    if (!cur.done.includes(i)) queue.addToQueue(queueEntryFor(cur, file, i), 0);
-  });
   startHeartbeat();
   saveState();
+  const { job } = cur;
+  print.runner
+    .runJob(job, {
+      order: cur.order,
+      done: cur.done,
+      // The cover sheet is printed once, with the first file, when the shop wants it
+      coverSheet: prefs.get().printSummarySheet && cur.done.length === 0,
+      onFile: (index, result) => onFileComplete(job.jobId, index, result.printer),
+    })
+    .then(() => {
+      // Cancelled (job taken away) leaves the current job cleared by dropCurrent
+      if (state.current && state.current.job.jobId === job.jobId && state.current.done.length >= job.files.length) finishCurrent('printed');
+    })
+    .catch((err) => onJobFailed(job, err));
 }
 
 function dropCurrent(reason) {
@@ -235,9 +189,10 @@ function dropCurrent(reason) {
   if (!cur) return;
   console.log(`🗑️ Job ${cur.job.jobId} removed from this computer: ${reason}`);
   stopHeartbeat();
-  removeLocalFiles(cur.job.jobId);
+  stopPrinting(cur.job.jobId);
   state.current = null;
   running = false;
+  activity = '';
   saveState();
 }
 
@@ -247,7 +202,7 @@ async function beginJob(job) {
     return;
   }
   console.log(`📥 Took job ${job.jobId} (${job.files.length} file(s), #${job.deliveryNumber || '-'})`);
-  state.current = { job, done: [], summary: await fetchSummary(job.orderId) };
+  state.current = { job, done: [], printers: {}, order: await fetchOrder(job.orderId) };
   running = false;
   saveState();
   try {
@@ -274,15 +229,32 @@ async function reconcileCurrent() {
   dropCurrent(sj.claimedBy && sj.claimedBy !== me ? 'taken by another device' : `status is ${sj.status}`);
 }
 
+/** At least one printer is switched on and ready. */
+function printersReady() {
+  return Boolean(print && print.registry.usable().length);
+}
+
 function canClaim() {
-  return !paused && Boolean(printerName) && Date.now() >= cooldownUntil && Boolean(session.getDeviceId());
+  return !paused && printersReady() && Date.now() >= cooldownUntil && Boolean(session.getDeviceId());
 }
 
 async function claimNext() {
   if (state.current || !canClaim()) return;
   const res = await session.apiFetch('/api/partner/v1/jobs/claim', { method: 'POST' });
   if (!res.ok) throw new Error(res.data.error || `Could not take a job (${res.status})`);
-  if (res.data.job) await beginJob(res.data.job);
+  if (!res.data.job) return;
+  // Never keep a job this shop's printers can't print (for example colour with only a B&W printer):
+  // give it back at once, so another computer can take it, and say why
+  const check = jobIsPossible(res.data.job.files || [], print.registry.snapshot().printers);
+  if (!check.ok) {
+    await report(res.data.job.jobId, 'release', check.reason).catch(() => undefined);
+    lastError = `Order ${res.data.job.orderId} was given back: ${check.reason}`;
+    cooldownUntil = Date.now() + FAILURE_COOLDOWN_MS;
+    setTimeout(() => sync('cooldown over'), FAILURE_COOLDOWN_MS + 1000);
+    reportError(new Error(`Job given back: ${check.reason}`), { level: 'warning', context: { jobId: res.data.job.jobId, orderId: res.data.job.orderId } });
+    return;
+  }
+  await beginJob(res.data.job);
 }
 
 /** Send saved "printed"/"failed" reports. Stops at the first network/server error. */
@@ -291,7 +263,7 @@ async function flushReports() {
     const pr = state.pendingReports[0];
     let res;
     try {
-      res = await report(pr.jobId, pr.status, pr.error);
+      res = await report(pr.jobId, pr.status, pr.error, pr.printer);
     } catch (err) {
       if (err instanceof session.NotSignedInError) throw err;
       return; // offline: try again on the next sync
@@ -322,48 +294,53 @@ function finishCurrent(status, error) {
   const cur = state.current;
   if (!cur) return;
   stopHeartbeat();
-  removeLocalFiles(cur.job.jobId);
   state.pendingReports.push({
     jobId: cur.job.jobId,
     orderId: cur.job.orderId,
     deliveryType: cur.job.deliveryType,
     status,
+    printer: printersUsed(cur),
     ...(error ? { error } : {}),
   });
   state.current = null;
   running = false;
+  activity = '';
   saveState();
   emit();
   sync(`job ${status}`);
 }
 
-// ── Local queue hooks ──────────────────────────────────────────────────
+// ── Print runner hooks ─────────────────────────────────────────────────
 
-function onFileComplete(entry) {
-  const j = entry.job || {};
-  // "Print again" entries have no job and change nothing on the server
-  if (!j.jobId) return;
+function onFileComplete(jobId, index, printer) {
   const cur = state.current;
-  if (!cur || cur.job.jobId !== j.jobId) return;
-  if (!cur.done.includes(j.fileIndex)) cur.done.push(j.fileIndex);
+  if (!cur || cur.job.jobId !== jobId) return;
+  if (!cur.done.includes(index)) cur.done.push(index);
+  cur.printers = { ...(cur.printers || {}), [index]: printer };
   saveState();
   emit();
-  if (cur.done.length >= cur.job.files.length) finishCurrent('printed');
 }
 
-function onFileFailed(entry, error) {
-  const j = entry.job || {};
-  reportError(new Error(`Print failed: ${error}`), {
-    level: 'warning',
-    context: { jobId: j.jobId, orderId: j.orderId, file: j.fileName },
-  });
+function onJobFailed(job, err) {
   const cur = state.current;
-  if (!j.jobId || !cur || cur.job.jobId !== j.jobId) return;
+  if (!cur || cur.job.jobId !== job.jobId) return;
+  const message = err?.message || String(err);
+  reportError(err instanceof Error ? err : new Error(message), {
+    level: 'warning',
+    context: { jobId: job.jobId, orderId: job.orderId, code: err?.code },
+  });
   // The job goes back to the shop's queue; wait before taking another so a
   // broken printer doesn't burn through jobs
   cooldownUntil = Date.now() + FAILURE_COOLDOWN_MS;
   setTimeout(() => sync('cooldown over'), FAILURE_COOLDOWN_MS + 1000);
-  finishCurrent('failed', error);
+  lastError = message;
+  finishCurrent('failed', message);
+}
+
+/** Progress from the runner (preparing / printing / waiting for the printer…). */
+function onRunnerStatus(e) {
+  if (e.status !== undefined) activity = e.status;
+  emit();
 }
 
 // ── Notifications for manual-acceptance shops ─────────────────────────
@@ -425,24 +402,16 @@ function sync(reason = 'sync') {
 
 // ── Public API ─────────────────────────────────────────────────────────
 
-function init(listener, { newOrder } = {}) {
+function init(listener, { newOrder, printService } = {}) {
   onChange = listener || onChange;
   if (newOrder) onNewOrder = newOrder;
+  print = printService;
   loadState();
-  queue.init();
-  queue.setHooks({ onComplete: onFileComplete, onFailed: onFileFailed });
-  // Nothing prints on start-up by itself. Job files go back in only after the
-  // server confirms the job is still this computer's. Entries left by the earlier
-  // app version and "Print again" entries are dropped: they may be weeks old, and
-  // the order is still listed (and can be printed again) under Manage Orders.
-  const leftovers = queue
-    .getQueueStatus()
-    .jobs.filter((e) => !(e.job && e.job.jobId))
-    .map((e) => e.job && e.job.orderId)
-    .filter(Boolean);
-  if (leftovers.length) console.log(`🧹 Not printing ${leftovers.length} old local queue entr(ies): ${[...new Set(leftovers)].join(', ')}`);
-  queue.removeWhere(() => true);
-  queue.start();
+  print.registry.events.on('changed', () => {
+    emit();
+    // A printer coming back (or being switched on) may unblock waiting jobs
+    if (printersReady()) sync('printers changed');
+  });
 }
 
 function start() {
@@ -472,18 +441,8 @@ async function releaseCurrent() {
 
 function setPaused(value) {
   paused = Boolean(value);
-  queue.setPaused(paused);
   emit();
   if (!paused) sync('resumed');
-}
-
-function setPrinter(name) {
-  const changed = name !== printerName;
-  printerName = name || null;
-  if (printerName) process.env.PRINTER_NAME = printerName;
-  else delete process.env.PRINTER_NAME;
-  emit();
-  if (changed && printerName) sync('printer selected');
 }
 
 /** accept | reject from the UI (manual-acceptance shops). */
@@ -497,4 +456,4 @@ async function jobAction(jobId, action, reason) {
   return { ok: res.ok, error: res.ok ? undefined : res.data.error || `Request failed (${res.status})` };
 }
 
-module.exports = { init, start, stop, sync, releaseCurrent, setPaused, setPrinter, jobAction, snapshot };
+module.exports = { init, start, stop, sync, releaseCurrent, setPaused, jobAction, snapshot, onRunnerStatus };
