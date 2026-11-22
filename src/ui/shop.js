@@ -192,9 +192,52 @@ function initShop() {
     $('set-city').value = p.address?.city || '';
     $('set-state').value = p.address?.state || '';
     $('set-zip').value = p.address?.zipCode || '';
-    $('set-price-bw').value = p.pricing?.perPageBW ?? '';
-    $('set-price-color').value = p.pricing?.perPageColor ?? '';
-    $('set-price-binding').value = p.pricing?.binding ?? '';
+    
+    // Printing service
+    $('set-printing-enabled').checked = p.servicesOffered?.printing?.enabled ?? true;
+    $('set-max-paper-size').value = p.servicesOffered?.printing?.maxPaperSize || 'a4';
+    $('set-supports-color').checked = p.servicesOffered?.printing?.supportsColor ?? true;
+    $('set-supports-bw').checked = p.servicesOffered?.printing?.supportsBlackAndWhite ?? true;
+    $('set-supports-duplex').checked = p.servicesOffered?.printing?.supportsDoubleSided ?? false;
+    
+    // Printing prices
+    $('set-price-a4-bw-single').value = p.pricing?.printing?.a4?.blackAndWhite?.singleSided ?? '';
+    $('set-price-a4-bw-double').value = p.pricing?.printing?.a4?.blackAndWhite?.doubleSided ?? '';
+    $('set-price-a4-color-single').value = p.pricing?.printing?.a4?.color?.singleSided ?? '';
+    $('set-price-a4-color-double').value = p.pricing?.printing?.a4?.color?.doubleSided ?? '';
+    $('set-price-a3-bw-single').value = p.pricing?.printing?.a3?.blackAndWhite?.singleSided ?? '';
+    $('set-price-a3-bw-double').value = p.pricing?.printing?.a3?.blackAndWhite?.doubleSided ?? '';
+    $('set-price-a3-color-single').value = p.pricing?.printing?.a3?.color?.singleSided ?? '';
+    $('set-price-a3-color-double').value = p.pricing?.printing?.a3?.color?.doubleSided ?? '';
+    
+    // Binding service
+    $('set-binding-enabled').checked = p.servicesOffered?.binding?.enabled ?? false;
+    $('set-binding-spiral').checked = p.servicesOffered?.binding?.types?.spiral ?? false;
+    $('set-binding-perfect').checked = p.servicesOffered?.binding?.types?.perfect ?? false;
+    $('set-binding-staple').checked = p.servicesOffered?.binding?.types?.staple ?? false;
+    $('set-price-binding-spiral').value = p.pricing?.binding?.spiral ?? '';
+    $('set-price-binding-perfect').value = p.pricing?.binding?.perfect ?? '';
+    $('set-price-binding-staple').value = p.pricing?.binding?.staple ?? '';
+    
+    // Other services
+    $('set-lamination-enabled').checked = p.servicesOffered?.lamination?.enabled ?? false;
+    $('set-lamination-max-size').value = p.servicesOffered?.lamination?.maxSize || 'a4';
+    $('set-price-lamination-a4').value = p.pricing?.lamination?.a4 ?? '';
+    $('set-price-lamination-a3').value = p.pricing?.lamination?.a3 ?? '';
+    
+    $('set-scanning-enabled').checked = p.servicesOffered?.scanning?.enabled ?? false;
+    $('set-price-scanning').value = p.pricing?.scanning ?? '';
+    
+    $('set-photocopying-enabled').checked = p.servicesOffered?.photocopying?.enabled ?? false;
+    $('set-photocopying-color').checked = p.servicesOffered?.photocopying?.supportsColor ?? false;
+    $('set-price-photocopying-bw').value = p.pricing?.photocopying?.blackAndWhite ?? '';
+    $('set-price-photocopying-color').value = p.pricing?.photocopying?.color ?? '';
+    
+    $('set-plastic-files-enabled').checked = p.servicesOffered?.plasticFiles?.enabled ?? false;
+    $('set-price-plastic-files').value = p.pricing?.plasticFiles ?? '';
+    
+    $('set-delivery-enabled').checked = p.servicesOffered?.delivery?.enabled ?? false;
+    
     $('set-is-online').checked = Boolean(p.isOnline);
     $('set-is-online').disabled = !p.isActive;
     $('set-acceptance-mode').value = p.acceptanceMode === 'manual' ? 'manual' : 'auto';
@@ -252,7 +295,77 @@ function initShop() {
       businessName: $('set-business-name').value.trim(),
       location: point($('set-lat').value, $('set-lng').value),
       address: { street: $('set-street').value.trim(), city: $('set-city').value.trim(), state: $('set-state').value.trim(), zipCode: $('set-zip').value.trim() },
-      pricing: { perPageBW: num('set-price-bw', 2), perPageColor: num('set-price-color', 10), binding: num('set-price-binding', 40) },
+      servicesOffered: {
+        printing: {
+          enabled: $('set-printing-enabled').checked,
+          maxPaperSize: $('set-max-paper-size').value,
+          supportsColor: $('set-supports-color').checked,
+          supportsBlackAndWhite: $('set-supports-bw').checked,
+          supportsDoubleSided: $('set-supports-duplex').checked,
+        },
+        binding: {
+          enabled: $('set-binding-enabled').checked,
+          types: {
+            spiral: $('set-binding-spiral').checked,
+            perfect: $('set-binding-perfect').checked,
+            staple: $('set-binding-staple').checked,
+          },
+        },
+        lamination: {
+          enabled: $('set-lamination-enabled').checked,
+          maxSize: $('set-lamination-max-size').value,
+        },
+        scanning: {
+          enabled: $('set-scanning-enabled').checked,
+        },
+        photocopying: {
+          enabled: $('set-photocopying-enabled').checked,
+          supportsColor: $('set-photocopying-color').checked,
+        },
+        plasticFiles: {
+          enabled: $('set-plastic-files-enabled').checked,
+        },
+        delivery: {
+          enabled: $('set-delivery-enabled').checked,
+        },
+        customServices: [],
+      },
+      pricing: {
+        printing: {
+          a4: {
+            blackAndWhite: { singleSided: num('set-price-a4-bw-single', 2), doubleSided: num('set-price-a4-bw-double', 3) },
+            color: { singleSided: num('set-price-a4-color-single', 10), doubleSided: num('set-price-a4-color-double', 15) },
+          },
+          a3: {
+            blackAndWhite: { singleSided: num('set-price-a3-bw-single', 4), doubleSided: num('set-price-a3-bw-double', 6) },
+            color: { singleSided: num('set-price-a3-color-single', 20), doubleSided: num('set-price-a3-color-double', 30) },
+          },
+          letter: {
+            blackAndWhite: { singleSided: num('set-price-a4-bw-single', 2), doubleSided: num('set-price-a4-bw-double', 3) },
+            color: { singleSided: num('set-price-a4-color-single', 10), doubleSided: num('set-price-a4-color-double', 15) },
+          },
+          legal: {
+            blackAndWhite: { singleSided: num('set-price-a4-bw-single', 2), doubleSided: num('set-price-a4-bw-double', 3) },
+            color: { singleSided: num('set-price-a4-color-single', 10), doubleSided: num('set-price-a4-color-double', 15) },
+          },
+        },
+        binding: {
+          spiral: num('set-price-binding-spiral', 30),
+          perfect: num('set-price-binding-perfect', 50),
+          staple: num('set-price-binding-staple', 10),
+        },
+        lamination: {
+          a4: num('set-price-lamination-a4', 20),
+          a3: num('set-price-lamination-a3', 40),
+        },
+        scanning: num('set-price-scanning', 5),
+        photocopying: {
+          blackAndWhite: num('set-price-photocopying-bw', 2),
+          color: num('set-price-photocopying-color', 10),
+        },
+        plasticFiles: num('set-price-plastic-files', 10),
+        customServices: [],
+      },
       isOnline: $('set-is-online').checked,
       acceptanceMode: $('set-acceptance-mode').value === 'manual' ? 'manual' : 'auto',
       phoneNumbers: [...document.querySelectorAll('.shop-phone')].map((i) => i.value.trim()).filter(Boolean),

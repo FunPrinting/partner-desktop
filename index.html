@@ -164,15 +164,110 @@
             </div>
 
             <div class="section">
-              <div class="section-head"><span class="section-title">Prices (₹)</span></div>
+              <div class="section-head"><span class="section-title">Printing service</span></div>
               <div class="card card-pad">
-                <div class="grid-3">
-                  <div class="field"><label for="set-price-bw">B&amp;W page</label><input class="input" type="number" min="0" step="0.5" id="set-price-bw"></div>
-                  <div class="field"><label for="set-price-color">Colour page</label><input class="input" type="number" min="0" step="0.5" id="set-price-color"></div>
-                  <div class="field"><label for="set-price-binding">Binding</label><input class="input" type="number" min="0" step="1" id="set-price-binding"></div>
+                <label class="checkbox"><input type="checkbox" id="set-printing-enabled"><span>Enable printing service</span></label>
+                <div class="grid-2" style="margin-top:12px">
+                  <div class="field"><label for="set-max-paper-size">Maximum paper size</label>
+                    <select class="input" id="set-max-paper-size">
+                      <option value="a4">A4 (and smaller)</option>
+                      <option value="a3">A3 (can also print A4, Letter, Legal)</option>
+                      <option value="letter">Letter</option>
+                      <option value="legal">Legal</option>
+                    </select>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <label class="checkbox"><input type="checkbox" id="set-supports-color"><span>Supports colour printing</span></label>
+                    <label class="checkbox"><input type="checkbox" id="set-supports-bw"><span>Supports B&amp;W printing</span></label>
+                    <label class="checkbox"><input type="checkbox" id="set-supports-duplex"><span>Supports double-sided</span></label>
+                  </div>
                 </div>
               </div>
-              <div class="section-foot">Customers pay these plus a 3% processing fee.</div>
+              <div class="section-foot">Configure your printer capabilities. An A3 printer can also print A4 and smaller sizes.</div>
+            </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">Printing prices (₹)</span></div>
+              <div class="card card-pad">
+                <div style="margin-bottom:12px"><strong>A4 size</strong></div>
+                <div class="grid-4" style="margin-bottom:16px">
+                  <div class="field"><label for="set-price-a4-bw-single">B&amp;W single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-single"></div>
+                  <div class="field"><label for="set-price-a4-bw-double">B&amp;W duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-bw-double"></div>
+                  <div class="field"><label for="set-price-a4-color-single">Color single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-single"></div>
+                  <div class="field"><label for="set-price-a4-color-double">Color duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a4-color-double"></div>
+                </div>
+                <div style="margin-bottom:12px"><strong>A3 size</strong></div>
+                <div class="grid-4">
+                  <div class="field"><label for="set-price-a3-bw-single">B&amp;W single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-single"></div>
+                  <div class="field"><label for="set-price-a3-bw-double">B&amp;W duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-bw-double"></div>
+                  <div class="field"><label for="set-price-a3-color-single">Color single</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-single"></div>
+                  <div class="field"><label for="set-price-a3-color-double">Color duplex</label><input class="input" type="number" min="0" step="0.5" id="set-price-a3-color-double"></div>
+                </div>
+              </div>
+              <div class="section-foot">Per-page prices. Customers pay these plus a 3% processing fee.</div>
+            </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">Binding service</span></div>
+              <div class="card card-pad">
+                <label class="checkbox"><input type="checkbox" id="set-binding-enabled"><span>Enable binding service</span></label>
+                <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+                  <label class="checkbox"><input type="checkbox" id="set-binding-spiral"><span>Spiral binding</span></label>
+                  <label class="checkbox"><input type="checkbox" id="set-binding-perfect"><span>Perfect binding</span></label>
+                  <label class="checkbox"><input type="checkbox" id="set-binding-staple"><span>Staple binding</span></label>
+                </div>
+                <div class="grid-3" style="margin-top:12px">
+                  <div class="field"><label for="set-price-binding-spiral">Spiral (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-spiral"></div>
+                  <div class="field"><label for="set-price-binding-perfect">Perfect (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-perfect"></div>
+                  <div class="field"><label for="set-price-binding-staple">Staple (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-binding-staple"></div>
+                </div>
+              </div>
+              <div class="section-foot">Price per order (not per page). Enable the types you offer.</div>
+            </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">Other services</span></div>
+              <div class="card card-pad">
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div>
+                    <label class="checkbox"><input type="checkbox" id="set-lamination-enabled"><span>Lamination</span></label>
+                    <div class="grid-3" style="margin-top:8px;margin-left:24px">
+                      <div class="field"><label for="set-lamination-max-size">Max size</label>
+                        <select class="input" id="set-lamination-max-size">
+                          <option value="a4">A4</option>
+                          <option value="a3">A3 (also does A4)</option>
+                        </select>
+                      </div>
+                      <div class="field"><label for="set-price-lamination-a4">A4 price (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-lamination-a4"></div>
+                      <div class="field"><label for="set-price-lamination-a3">A3 price (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-lamination-a3"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="checkbox"><input type="checkbox" id="set-scanning-enabled"><span>Scanning</span></label>
+                    <div class="field" style="margin-top:8px;margin-left:24px;max-width:200px">
+                      <label for="set-price-scanning">Price per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-scanning">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="checkbox"><input type="checkbox" id="set-photocopying-enabled"><span>Photocopying</span></label>
+                    <div class="grid-3" style="margin-top:8px;margin-left:24px">
+                      <label class="checkbox"><input type="checkbox" id="set-photocopying-color"><span>Color available</span></label>
+                      <div class="field"><label for="set-price-photocopying-bw">B&amp;W per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-bw"></div>
+                      <div class="field"><label for="set-price-photocopying-color">Color per page (₹)</label><input class="input" type="number" min="0" step="0.5" id="set-price-photocopying-color"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="checkbox"><input type="checkbox" id="set-plastic-files-enabled"><span>Plastic files</span></label>
+                    <div class="field" style="margin-top:8px;margin-left:24px;max-width:200px">
+                      <label for="set-price-plastic-files">Price per item (₹)</label><input class="input" type="number" min="0" step="1" id="set-price-plastic-files">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="checkbox"><input type="checkbox" id="set-delivery-enabled"><span>Delivery</span></label>
+                  </div>
+                </div>
+              </div>
+              <div class="section-foot">Additional services your shop provides. Check to enable.</div>
             </div>
 
             <div class="section">
