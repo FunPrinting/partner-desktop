@@ -21,6 +21,8 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
   let refreshing = null;
   let lastError = null;
   let lastRefreshAt = null;
+  let available = []; // found on the network, not set up here (set by discovery/finder.js)
+  let scanState = { scanning: false, lastScanAt: 0, error: null };
 
   const settings = () => ({ ...(store.get() || {}) });
 
@@ -36,6 +38,8 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
         enabled: Boolean(s[p.id]?.enabled),
         preferredBw: Boolean(s[p.id]?.preferredBw),
       })),
+      available,
+      scan: scanState,
       lastRefreshAt,
       lastError,
     };
@@ -139,7 +143,17 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
     timer = null;
   }
 
-  return { refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
+  /** Network printers that are not set up on this computer. */
+  function setAvailable(list, { scanning = false, lastScanAt = scanState.lastScanAt } = {}) {
+    const before = JSON.stringify([available.map(({ device, ...a }) => a), scanState.scanning]);
+    available = list;
+    scanState = { ...scanState, scanning, lastScanAt };
+    if (before !== JSON.stringify([available.map(({ device, ...a }) => a), scanState.scanning])) events.emit('available', snapshot());
+  }
+  function setScanError(error) {
+    scanState = { ...scanState, error };
+  }
+  return { setAvailable, setScanError, refresh, update, snapshot, usable, start, stop, events, get: (id) => printers.get(id) };
 }
 
 module.exports = { createRegistry };
