@@ -81,6 +81,7 @@ function createRegistry({ engine, store, intervalMs = 15_000, capsTtlMs = 10 * 6
       lastError = null;
     } catch (err) {
       lastError = err.message;
+      console.error(`Printer list failed: ${err.code || ''} ${err.message}`);
       events.emit('changed', snapshot());
       return snapshot();
     }

@@ -26,12 +26,33 @@ function fakeNative(over = {}) {
 
 const engineWith = (native) => createWindowsEngine({ native, pdfiumPath: 'C:\\app\\pdfium.dll' });
 
-test('initialises PDFium once, with the given path', async () => {
+test('listing printers does not need PDFium; printing loads it once, with the given path', async () => {
   const n = fakeNative();
   const e = engineWith(n);
   await e.listPrinters();
-  await e.listPrinters();
+  await e.capabilities('HP LaserJet');
+  assert.deepEqual(n.calls.filter((c) => c[0] === 'init'), []);
+  await e.print({ printer: 'HP LaserJet', file: 'a.pdf', copies: 1, media: 'A4', colour: 'bw' });
+  await e.print({ printer: 'HP LaserJet', file: 'a.pdf', copies: 1, media: 'A4', colour: 'bw' });
   assert.deepEqual(n.calls.filter((c) => c[0] === 'init'), [['init', 'C:\\app\\pdfium.dll']]);
+});
+
+test('a PDFium that will not load fails printing but still lists printers', async () => {
+  const n = fakeNative({
+    init: () => {
+      throw new Error('DRIVER_FAILED: LoadLibrary failed (126)');
+    },
+  });
+  const e = engineWith(n);
+  assert.equal((await e.listPrinters()).length, 2);
+  await assert.rejects(e.print({ printer: 'HP LaserJet', file: 'a.pdf', copies: 1, media: 'A4', colour: 'bw' }), (err) => err.code === 'DRIVER_FAILED' && /LoadLibrary/.test(err.message));
+});
+
+test('in the installed app the native files are read from app.asar.unpacked', () => {
+  const { nativeDir } = require('../../src/print/engines/windowsEngine');
+  assert.match(nativeDir('C:\\Program Files\\FunPrinting Partner\\resources\\app.asar'), /resources\\app\.asar\.unpacked[\\/]native[\\/]fp-print$/);
+  assert.match(nativeDir('/opt/app/resources/app.asar'), /app\.asar\.unpacked\/native\/fp-print$/);
+  assert.equal(nativeDir('/src/partner-desktop'), require('node:path').join('/src/partner-desktop', 'native', 'fp-print'));
 });
 
 test('printers get a stable id (port + driver) and an online state from the spooler flags', async () => {

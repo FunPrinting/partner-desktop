@@ -8,6 +8,7 @@ function initSettings({ getPrefs, setPrefs }) {
   const $ = (id) => document.getElementById(id);
   const printersList = $('printers-list');
   let printers = [];
+  let lastError = null; // the printer system could not be read
 
   // ── Printers ────────────────────────────────────────────────────────
 
@@ -20,8 +21,11 @@ function initSettings({ getPrefs, setPrefs }) {
   }
 
   function renderPrinters() {
+    const problem = lastError ? `<div class="row"><div class="row-main"><div class="row-title" style="color:var(--danger,#c0392b)">The printer system could not be read</div><div class="row-sub">${esc(lastError)}</div><div class="row-sub">Click Refresh to try again. If this keeps happening, send the Logs page to FunPrinting support.</div></div></div>` : '';
     if (!printers.length) {
-      printersList.innerHTML = `<div class="row"><div class="row-main"><div class="row-title">No printers found</div><div class="row-sub">Connect a printer and add it in your system settings, then click Refresh.</div></div></div>`;
+      printersList.innerHTML =
+        problem ||
+        `<div class="row"><div class="row-main"><div class="row-title">No printers found</div><div class="row-sub">Connect a printer by USB or Wi-Fi, add it in your system settings (or with Add below), then click Refresh.</div></div></div>`;
       return;
     }
     const enabledCount = printers.filter((p) => p.enabled).length;
@@ -45,7 +49,7 @@ function initSettings({ getPrefs, setPrefs }) {
           <label class="switch"><input type="checkbox" data-printer="${esc(p.id)}" aria-label="Use ${esc(p.displayName || p.name)}" ${p.enabled ? 'checked' : ''} ${p.needsTest ? 'disabled' : ''}><span></span></label>
         </div>`;
       })
-      .join('');
+      .join('') + problem;
   }
 
   const foundList = $('found-list');
@@ -78,6 +82,7 @@ function initSettings({ getPrefs, setPrefs }) {
 
   function setPrinters(snap) {
     printers = (snap && snap.printers) || [];
+    lastError = (snap && snap.lastError) || null;
     found = (snap && snap.available) || [];
     moves = (snap && snap.moves) || [];
     scanning = Boolean(snap && snap.scan && snap.scan.scanning);

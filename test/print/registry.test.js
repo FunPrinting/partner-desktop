@@ -109,3 +109,18 @@ test('changes are announced; an unchanged refresh is quiet', async () => {
   await reg.refresh();
   assert.equal(n, after);
 });
+
+test('an engine that cannot list printers reports why, instead of an empty list', async () => {
+  const { createRegistry: make } = require('../../src/print/registry');
+  let saved = {};
+  const engine = {
+    listPrinters: async () => {
+      throw Object.assign(new Error('The print engine could not be loaded: LoadLibrary failed'), { code: 'DRIVER_FAILED' });
+    },
+    capabilities: async () => ({}),
+  };
+  const reg = make({ engine, store: { get: () => saved, set: (v) => (saved = v) } });
+  const snap = await reg.refresh();
+  require('node:assert/strict').deepEqual(snap.printers, []);
+  require('node:assert/strict').match(snap.lastError, /could not be loaded/);
+});

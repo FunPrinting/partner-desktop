@@ -83,38 +83,52 @@ function toPrintError(err) {
   return new PrintError(`The Windows print system failed: ${err?.message || err}`, CODES.DRIVER_FAILED);
 }
 
-function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os.tmpdir() } = {}) {
-  let mod = native;
-  let ready = false;
-  const lastSeen = new Map(); // `${printer}:${job}` -> last job status flags
+/**
+ * Where the add-on's files are. In the installed app the code sits inside app.asar, but
+ * native files are unpacked next to it (package.json "asarUnpack"): Windows can only load a
+ * DLL from a real folder, so the path must point into app.asar.unpacked.
+ */
+function nativeDir(baseDir = path.join(__dirname, '..', '..', '..')) {
+  const dir = path.join(baseDir, 'native', 'fp-print');
+  return dir.replace(/([\\/])app\.asar([\\/])/, '$1app.asar.unpacked$2');
+}
 
+function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os.tmpdir(), baseDir } = {}) {
+  let mod = native;
+  let pdfiumReady = false;
+  const lastSeen = new Map(); // `${printer}:${job}` -> last job status flags
+  const dir = nativeDir(baseDir);
+  /** The add-on: enough to list printers, read their properties and follow jobs. */
   function load() {
     if (!mod) {
       try {
-        mod = require(path.join(__dirname, '..', '..', '..', 'native', 'fp-print', 'fp-print.node'));
+        mod = require(path.join(dir, 'fp-print.node'));
       } catch (err) {
         throw new PrintError(`The print engine could not be loaded: ${err.message}`, CODES.DRIVER_FAILED);
       }
     }
-    if (!ready) {
+    return mod;
+  }
+  /** PDFium, needed only to print. A problem here never hides the printer list. */
+  function loadForPrinting() {
+    const m = load();
+    if (!pdfiumReady) {
       try {
-        mod.init(pdfiumPath || path.join(__dirname, '..', '..', '..', 'native', 'fp-print', 'pdfium.dll'));
+        m.init(pdfiumPath || path.join(dir, 'pdfium.dll'));
       } catch (err) {
         throw toPrintError(err);
       }
-      ready = true;
+      pdfiumReady = true;
     }
-    return mod;
+    return m;
   }
-
-  const guard = (fn) => {
+  const guard = (fn, loader = load) => {
     try {
-      return fn(load());
+      return fn(loader());
     } catch (err) {
       throw err instanceof PrintError ? err : toPrintError(err);
     }
   };
-
   return {
     name: 'windows',
 
@@ -128,7 +142,7 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
     },
 
     async print(job) {
-      const m = guard((x) => x);
+      const m = guard((x) => x, loadForPrinting);
       try {
         const out = await m.print({ printer: job.printer, file: job.file, title: String(job.title || 'FunPrinting').slice(0, 200), copies: job.copies, duplex: Boolean(job.duplex), color: job.colour === 'color', paper: job.media === 'A3' ? 'A3' : 'A4' });
         return { jobRef: String(out.jobId), mode: out.mode, pages: out.pages };
@@ -166,6 +180,11 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
       return { state: 'pending' };
     },
 
+    /** For the self-test: can PDFium be loaded? */
+    checkPrinting() {
+      guard((x) => x, loadForPrinting);
+      return { pdfium: true, dir };
+    },
     async cancel(printer, jobRef) {
       try {
         guard((m) => m.cancelJob(printer, Number(jobRef)));
@@ -238,4 +257,4 @@ function createWindowsEngine({ native, pdfiumPath, run = defaultRun, tmpDir = os
   };
 }
 
-module.exports = { createWindowsEngine, printerFrom, reasonsFromStatus, toPrintError, PS, JS };
+module.exports = { nativeDir, createWindowsEngine, printerFrom, reasonsFromStatus, toPrintError, PS, JS };

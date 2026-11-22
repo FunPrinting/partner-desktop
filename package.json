@@ -11,7 +11,8 @@
     "test:native": "cargo test --manifest-path native/fp-print/Cargo.toml --lib",
     "smoke:print": "node scripts/smoke-print.js",
     "discover": "node scripts/discover.js",
-    "smoke:add": "node scripts/smoke-add.js"
+    "smoke:add": "node scripts/smoke-add.js",
+    "check:packaged": "node scripts/check-packaged.js"
   },
   "keywords": [],
   "author": "",

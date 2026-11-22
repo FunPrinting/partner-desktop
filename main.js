@@ -21,8 +21,11 @@ errorReporter.installGlobalHandlers();
 let quitting = false;
 let onNewWindow = () => {};
 
-// One instance only: two would fight over the sign-in port and the print queue
-if (!app.requestSingleInstanceLock()) {
+// Diagnostics: check printers and the print engine, print a report, exit
+if (process.argv.includes('--self-test')) {
+  app.whenReady().then(async () => app.exit(await require('./src/main/selfTest').runSelfTest(app)));
+} else if (!app.requestSingleInstanceLock()) {
+  // One instance only: two would fight over the sign-in port and the print queue
   app.quit();
 } else {
   const showWindow = () => {

@@ -30,3 +30,8 @@ jobs:
         timeout-minutes: 8
         if: matrix.os == 'windows-latest'
         run: npm run smoke:add
+      - name: Package the app and check the installed build sees printers
+        timeout-minutes: 15
+        run: |
+          npx electron-builder --dir --publish never
+          npm run check:packaged
