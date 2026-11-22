@@ -62,7 +62,10 @@ function createRunner({ engine, registry, cache, renderSummary, workDir, onStatu
         summary = undefined; // the order prints without a cover sheet rather than not at all
       }
     }
-    const prepared = await prepareFile({ file, cachedPath, workDir, name: `${ctx.jobId}-${ctx.index}`, summary }).catch((err) => {
+    const currentPrefs = typeof cfg.getPrefs === 'function' ? cfg.getPrefs() : (cfg.prefs || {});
+    const cohesive = Boolean(currentPrefs.cohesiveJobs);
+    const reverseOrder = Boolean(currentPrefs.lifoStackOrder);
+    const prepared = await prepareFile({ file, cachedPath, workDir, name: `${ctx.jobId}-${ctx.index}`, summary, cohesive, reverseOrder }).catch((err) => {
       throw new PrintError(`The PDF could not be read: ${err.message}`, CODES.FILE_UNREADABLE);
     });
 

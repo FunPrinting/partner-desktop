@@ -62,7 +62,7 @@ function createPrintService({ prefs, dataDir, powerMonitor, onStatus = () => {},
   });
   const finder = createFinder({ registry, canMove: typeof engine.movePrinter === 'function', log: (m) => console.log(m), ...discovery });
   const cache = createCache({ dir: path.join(dataDir, 'print-cache') });
-  const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
+  const runner = createRunner({ engine, registry, cache, renderSummary, workDir: path.join(dataDir, 'print-work'), getPrefs: () => prefs.get(), onStatus: (e) => onStatus({ ...e, status: describeStatus(e) }) });
 
   let scanTimer = null;
 

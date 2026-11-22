@@ -47,6 +47,20 @@ test('a colour document with a summary prints the summary in B&W and the documen
   assert.deepEqual(r.runs.map((x) => `${x.colour}:${x.pages.join(',')}x${x.copies}`), ['bw:1x1', 'color:2,3x3']);
 });
 
+test('cohesive request produces one single document run', () => {
+  const r = buildRequest({ color: 'mixed', colorPages: [2, 3], sided: 'single', copies: 2, pages: 4 }, { cohesive: true });
+  assert.equal(r.runs.length, 1);
+  assert.deepEqual(r.runs[0], { pages: [1, 2, 3, 4], colour: 'color', copies: 2 });
+});
+
+test('suffix summary sheet (LIFO mode) places summary run after document', () => {
+  const r = buildRequest({ color: 'bw', sided: 'single', copies: 1, pages: 3 }, { suffixPages: 1 });
+  assert.deepEqual(r.runs.map((x) => `${x.summary ? 'S ' : ''}${x.colour}:${x.pages.join(',')}x${x.copies}`), [
+    'bw:1,2,3x1',
+    'S bw:4x1',
+  ]);
+});
+
 test('withSummary adds a blank back page for double-sided, sized to the paper', async () => {
   const one = await withSummary(await pdf(3), await pdf(1), { duplex: false });
   assert.equal(one.prefixPages, 1);

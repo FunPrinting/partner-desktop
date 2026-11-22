@@ -19,9 +19,10 @@
  * @param {number[]} [input.colorPages] pages printed in colour when colour is 'mixed'
  * @param {boolean} input.duplex
  * @param {number} input.copies
+ * @param {boolean} [input.cohesive=false] send mixed documents as one single continuous job
  * @returns {{ pages: number[], colour: 'color'|'bw', copies: number }[]}
  */
-function planRuns({ pageCount, colour, colorPages = [], duplex, copies }) {
+function planRuns({ pageCount, colour, colorPages = [], duplex, copies, cohesive = false }) {
   const total = Math.max(1, Math.floor(pageCount) || 1);
   const count = Math.max(1, Math.floor(copies) || 1);
   const all = Array.from({ length: total }, (_, i) => i + 1);
@@ -31,6 +32,12 @@ function planRuns({ pageCount, colour, colorPages = [], duplex, copies }) {
   const inColour = new Set(colorPages.filter((p) => Number.isInteger(p) && p >= 1 && p <= total));
   if (inColour.size === 0) return [{ pages: all, colour: 'bw', copies: count }];
   if (inColour.size === total) return [{ pages: all, colour: 'color', copies: count }];
+
+  if (cohesive) {
+    // One Cohesive Print Job: all pages (color and B&W) sent in natural document order as one single run.
+    // The printer feeds paper continuously without paper ejects or multi-part job interruptions.
+    return [{ pages: all, colour: 'color', copies: count }];
+  }
 
   // Units: single pages, or sheets of two pages for double-sided
   const size = duplex ? 2 : 1;

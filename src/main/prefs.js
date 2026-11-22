@@ -17,6 +17,8 @@ const DEFAULTS = {
   soundNewOrders: false, // chime for orders to accept
   printSummarySheet: true, // order summary page on top of multi-page jobs
   autoReadyForPickup: true, // pickup orders move to "ready for pickup" after printing
+  cohesiveJobs: true, // send mixed documents as one continuous job on inkjets
+  lifoStackOrder: false, // LIFO page order (N to 1) for face-up inkjet trays
   openAtLogin: false,
   keepRunningInTray: false, // closing the window keeps printing in the background
   developerMode: false, // show the system log panel

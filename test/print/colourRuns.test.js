@@ -54,3 +54,8 @@ test('several runs with copies repeat the sequence once per copy, so stacks are 
 test('colour pages outside the document are ignored', () => {
   assert.deepEqual(brief(planRuns({ pageCount: 2, colour: 'mixed', colorPages: [0, 5, 2.5, 2], duplex: false, copies: 1 })), ['bw:1x1', 'color:2x1']);
 });
+
+test('cohesive mode sends mixed documents as one single continuous job', () => {
+  const runs = planRuns({ pageCount: 6, colour: 'mixed', colorPages: [2, 5], duplex: false, copies: 2, cohesive: true });
+  assert.deepEqual(brief(runs), ['color:1,2,3,4,5,6x2']);
+});
