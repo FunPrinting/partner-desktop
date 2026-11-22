@@ -55,6 +55,8 @@ Same design tokens as the mobile app: neutral surfaces, brand indigo on content 
 | App closed or offline | Jobs wait on the server; nothing is pushed and lost. Finished-job reports are saved and sent when back online. |
 | Restart mid-job | The job resumes only after the server confirms it is still this computer's; files already printed are skipped. |
 | Entries left by the earlier app version | Not printed (they may be old). The orders are still under Manage Orders, with "Print again". |
+| Wi-Fi printer not set up yet | Settings → **Found on your network** lists it with colour, double-sided and paper sizes. **Add** sets it up in the OS: macOS and Linux with `lpadmin -m everywhere` (driverless, by the printer's `.local` name so a new IP address keeps working); Windows with `Add-Printer -IppURL` (the built-in IPP Class Driver) after one permission prompt. IPP printers switch on straight away. Printers without IPP (raw 9100 / LPD) need their manufacturer's driver on this computer and stay off until a test page prints. |
+| Wi-Fi printer switched off, or got a new IP address | It shows offline within 15 seconds (the app opens its port itself; the OS keeps saying "Ready"). On macOS and Linux an offline queue whose printer shows up at another address offers **Update address**. |
 | Printer fails | 5 attempts with backoff, then the job is reported failed and goes back to the shop's queue; the app waits 2 minutes before taking another. |
 | No printer selected, or paused | No new jobs are taken; they stay in the shop's queue for other computers. |
 | Two computers in one shop | Each takes one job at a time; a claim is atomic on the server. |
@@ -75,5 +77,7 @@ Same design tokens as the mobile app: neutral surfaces, brand indigo on content 
 | `src/main/ipcHandlers.js`, `preload.js` | IPC; the window calls the partner API through the main process |
 | `src/main/errorReporter.js` | Error reports |
 | `src/print/` | Print engine: router, runner, tracker, printer registry. Windows uses the `native/fp-print` add-on (PDFium to GDI); macOS and Linux use CUPS. Mixed colour is split into same-colour PDFs |
+| `src/print/discovery/` | Finds Wi-Fi printers on the network (mDNS: IPP, IPPS, raw 9100, LPD), merges them to one entry per printer, reads their properties over IPP, matches them to printers already set up, and notices a printer that stopped answering or moved to a new address |
+| `src/print/engines/cupsSetup.js`, `windowsSetup.js` | Setting a found printer up in the OS (the **Add** button) |
 | `native/fp-print/` | Rust add-on for Windows printing |
 | `src/ui/` | Window scripts: `app.js` (shell), `jobs.js`, `orders.js`, `shop.js`, `settings.js`, `orderWindow.js`, `util.js`, `styles.css` |
