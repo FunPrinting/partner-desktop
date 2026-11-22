@@ -1,6 +1,6 @@
 /**
  * Socket connection to the WSS relay. The socket only says "something changed"
- * (jobs:available, cancel_print_job); job data always comes from the web API.
+ * (jobs:available); job data always comes from the web API.
  *
  * The server closes the socket when the 15-minute access token expires or the
  * device is signed out. Each (re)connect fetches a fresh token first.
@@ -85,7 +85,6 @@ function connect() {
   });
 
   socket.on('jobs:available', () => handlers.onJobsChanged('jobs:available'));
-  socket.on('cancel_print_job', () => handlers.onJobsChanged('cancel_print_job'));
   socket.on('signed_out', () => {
     // Revoked on the server: the refresh fails and ends the session
     session.refresh().catch(() => undefined);
