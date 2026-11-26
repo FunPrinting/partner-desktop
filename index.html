@@ -37,6 +37,7 @@
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
     <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></symbol>
   </svg>
 
   <!-- Sign-in -->
@@ -68,6 +69,7 @@
       <nav class="nav" id="nav">
         <button class="nav-item" data-page="jobs"><svg class="icon"><use href="#i-printer"/></svg>Jobs<span id="nav-jobs-count" class="count hidden"></span></button>
         <button class="nav-item" data-page="orders"><svg class="icon"><use href="#i-list"/></svg>Orders</button>
+        <button class="nav-item" data-page="messages"><svg class="icon"><use href="#i-message"/></svg>Messages<span id="nav-chat-count" class="count hidden"></span></button>
         <button class="nav-item" data-page="shop"><svg class="icon"><use href="#i-store"/></svg>Shop</button>
         <button class="nav-item" data-page="settings"><svg class="icon"><use href="#i-settings"/></svg>Settings</button>
         <button class="nav-item hidden" data-page="logs" id="nav-logs"><svg class="icon"><use href="#i-terminal"/></svg>Logs</button>
@@ -113,12 +115,63 @@
             <div class="search"><svg class="icon icon-sm"><use href="#i-search"/></svg><input id="orders-search" class="input" type="search" placeholder="Search order, file or customer" aria-label="Search orders"></div>
           </div>
           <div id="orders-banner"></div>
+          <div id="orders-cod-pending"></div>
           <div class="card" id="orders-card">
             <table class="table">
               <thead><tr><th>Order</th><th>Date</th><th>Document</th><th>Customer</th><th>Delivery</th><th class="num">Your share</th><th>Status</th><th></th></tr></thead>
               <tbody id="orders-tbody"></tbody>
             </table>
             <div id="orders-empty" class="empty hidden"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Messages & Broadcasts -->
+      <section class="page hidden" id="page-messages" aria-labelledby="h-messages">
+        <header class="page-head">
+          <div><h1 id="h-messages">Messages</h1><p>Customer chat, AI escalations, COD approval, and pickup-point broadcasts.</p></div>
+          <div class="actions"><button id="msg-refresh-btn" class="btn"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button></div>
+        </header>
+        <div class="content">
+          <div class="card card-pad" style="gap:12px">
+            <div style="font-weight:650">Pickup-point broadcast</div>
+            <div class="grid-3">
+              <div class="field"><label for="bp-point">Pickup point</label><select class="select" id="bp-point"></select></div>
+              <div class="field"><label for="bp-date">Scheduled date (optional)</label><input class="input" type="date" id="bp-date"></div>
+              <div class="field"><label>Audience</label><div id="bp-preview" class="small muted" style="padding-top:10px">Checking active orders…</div></div>
+            </div>
+            <div class="actions" style="flex-wrap:wrap">
+              <button type="button" class="btn btn-sm" data-bp-tpl="On the way to {point} with your orders, reaching in ~15 minutes.">On the way (15 min)</button>
+              <button type="button" class="btn btn-sm" data-bp-tpl="Reached {point}! Come collect your printed orders now.">Reached pickup point</button>
+              <button type="button" class="btn btn-sm" data-bp-tpl="Leaving {point} in 10 minutes — please collect your order soon!">Leaving in 10 min</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <textarea id="bp-message" class="input" rows="2" maxlength="1000" placeholder="Write an arrival or pickup announcement…" style="flex:1;height:auto;padding:8px"></textarea>
+              <button type="button" id="bp-send-btn" class="btn btn-primary">Send broadcast</button>
+            </div>
+            <div id="bp-history" class="content" style="gap:4px"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)">
+              <strong>Customer inbox</strong>
+              <select class="select" id="msg-point-filter" style="width:220px"><option value="__all__">All locations</option></select>
+            </div>
+            <div class="chat-split">
+              <div id="msg-conv-list" class="chat-list"></div>
+              <div>
+                <div id="msg-thread-empty" class="muted small" style="padding:48px;text-align:center">Select a customer chat on the left.</div>
+                <div id="msg-thread-pane" class="chat-thread hidden">
+                  <div id="msg-thread-head" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:8px"></div>
+                  <div id="msg-thread-banner"></div>
+                  <div id="msg-thread-messages" class="chat-messages"></div>
+                  <div style="display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:8px">
+                    <textarea id="msg-draft" class="input" rows="2" maxlength="2000" placeholder="Reply to customer…" style="flex:1;height:auto;padding:8px"></textarea>
+                    <button type="button" id="msg-send-btn" class="btn btn-primary">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -623,6 +676,35 @@
               <div class="content" style="gap:10px" id="dp-container"></div>
               <div class="section-foot">Places where you hand over delivery orders.</div>
             </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">Cash on Pickup (COD)</span></div>
+              <div class="card card-pad" style="gap:12px">
+                <div class="row" style="padding:0"><div class="row-main"><div class="row-title">Accept Cash on Pickup</div><div class="row-sub">Online payments use Razorpay. COD requires your approval in Messages before printing &amp; summary QR verification on pickup.</div></div><label class="switch"><input type="checkbox" id="set-cod-enabled"><span></span></label></div>
+                <div id="cod-body" class="content" style="gap:12px">
+                  <div class="row" style="padding:0"><div class="row-main"><div class="row-title">Allow COD at external pickup points</div><div class="row-sub">Keep off to restrict COD to your main shop counter.</div></div><label class="switch"><input type="checkbox" id="set-cod-allow-points"><span></span></label></div>
+                  <div class="grid-2">
+                    <div class="field"><label for="set-cod-max-amount">Max COD amount (₹50–1000)</label><input class="input" type="number" min="50" max="1000" id="set-cod-max-amount" placeholder="200"></div>
+                    <div class="field"><label for="set-cod-cash-fee">Optional cash fee (₹0–50)</label><input class="input" type="number" min="0" max="50" id="set-cod-cash-fee" placeholder="0"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">AI Support Assistant</span></div>
+              <div class="card card-pad" style="gap:12px">
+                <div class="row" style="padding:0"><div class="row-main"><div class="row-title">Auto-answer routine customer questions</div><div class="row-sub">Answers live order, slot, and COD queries and flags refunds or COD confirmations for your reply.</div></div><label class="switch"><input type="checkbox" id="set-ai-enabled"><span></span></label></div>
+                <div class="field" style="max-width:240px"><label for="set-ai-pause-mins">Auto-pause after your reply (minutes)</label><input class="input" type="number" min="5" max="240" id="set-ai-pause-mins" placeholder="45"></div>
+                <div class="field"><label for="set-ai-faq-notes">Shop FAQ &amp; pickup instructions</label><textarea class="input" id="set-ai-faq-notes" rows="3" maxlength="1500" placeholder="Store hours, binding notes, pickup point rider details…" style="height:auto;padding:8px"></textarea></div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-head"><span class="section-title">Pickup Time Slots</span><button type="button" id="add-slot-btn" class="btn btn-plain"><svg class="icon icon-sm"><use href="#i-plus"/></svg>Add slot</button></div>
+              <div class="content" style="gap:10px" id="slots-container"></div>
+              <div class="section-foot">Main store allows same-day slots before cutoff; pickup points schedule from tomorrow onwards.</div>
+            </div>
           </form>
         </div>
       </section>
@@ -720,6 +802,7 @@
   <script src="src/ui/orderCache.js"></script>
   <script src="src/ui/jobs.js"></script>
   <script src="src/ui/orders.js"></script>
+  <script src="src/ui/messages.js"></script>
   <script src="src/ui/shop.js"></script>
   <script src="src/ui/settings.js"></script>
   <script src="src/ui/app.js"></script>

@@ -129,6 +129,7 @@ if (process.argv.includes('--self-test')) {
       onStatus: (status) => send('status', status),
       onConnected: () => jobSync.sync('connected'),
       onJobsChanged: (reason) => jobSync.sync(reason),
+      onChatMessage: (data) => send('chat-message', data),
       onRemoteControl: (action) => jobSync.setPaused(action === 'pause'),
     });
 

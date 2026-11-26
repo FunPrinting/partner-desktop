@@ -30,6 +30,7 @@
       else el.removeAttribute('aria-current');
     });
     if (page === 'orders') pages.orders.load();
+    if (page === 'messages') pages.messages.load();
     if (page === 'shop') pages.shop.load();
     if (page === 'settings') pages.settings.loadPrinters();
   }
@@ -38,10 +39,10 @@
     const btn = e.target.closest('[data-page]');
     if (btn) show(btn.dataset.page);
   });
-  // Ctrl/Cmd + 1…4 switch pages
+  // Ctrl/Cmd + 1…5 switch pages
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey) || !signedIn) return;
-    const target = { 1: 'jobs', 2: 'orders', 3: 'shop', 4: 'settings' }[e.key];
+    const target = { 1: 'jobs', 2: 'orders', 3: 'messages', 4: 'shop', 5: 'settings' }[e.key];
     if (target) {
       e.preventDefault();
       show(target);
@@ -59,6 +60,7 @@
     if (next) {
       $('account-sub').textContent = 'This computer prints your shop\'s orders. You can also sign it out from the web dashboard.';
       show(currentPage);
+      pages.messages?.load();
     }
   }
 
@@ -106,6 +108,10 @@
   window.electronAPI.onNewOrder(() => {
     if (prefs.soundNewOrders) playChime();
   });
+  window.electronAPI.onChatMessage?.((payload) => {
+    pages.messages?.onSocketMessage(payload);
+    if (prefs.soundNewOrders) playChime();
+  });
 
   // ── Logs (developer mode) ──────────────────────────────────────────
 
@@ -138,6 +144,14 @@
 
       initJobs();
       pages.orders = initOrders();
+      pages.messages = initMessages({
+        onBadgeChange: (n) => {
+          const el = $('nav-chat-count');
+          if (!el) return;
+          el.textContent = n > 99 ? '99+' : String(n);
+          el.classList.toggle('hidden', n <= 0);
+        },
+      });
       pages.shop = initShop();
       pages.settings = initSettings({ getPrefs, setPrefs });
       applyPrefs();

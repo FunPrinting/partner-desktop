@@ -13,7 +13,7 @@ const session = require('./session');
 let socket = null;
 let retryTimer = null;
 let retryDelay = 2000;
-let handlers = { onConnected: () => {}, onJobsChanged: () => {}, onRemoteControl: () => {}, onStatus: () => {} };
+let handlers = { onConnected: () => {}, onJobsChanged: () => {}, onChatMessage: () => {}, onRemoteControl: () => {}, onStatus: () => {} };
 
 function setHandlers(next) {
   handlers = { ...handlers, ...next };
@@ -85,6 +85,7 @@ function connect() {
   });
 
   socket.on('jobs:available', () => handlers.onJobsChanged('jobs:available'));
+  socket.on('chat:message', (data) => handlers.onChatMessage(data || {}));
   socket.on('signed_out', () => {
     // Revoked on the server: the refresh fails and ends the session
     session.refresh().catch(() => undefined);

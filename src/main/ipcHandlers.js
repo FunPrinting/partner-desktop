@@ -13,7 +13,7 @@ const { checkForUpdates } = require('./updater');
 const { reportError } = require('./errorReporter');
 const prefs = require('./prefs');
 
-const API_PATH = /^\/api\/partner\/[A-Za-z0-9/_.?=&%-]*$/;
+const API_PATH = /^\/api\/(?:partner|chat)\/[A-Za-z0-9/_.?=&%-]*$/;
 const API_METHODS = new Set(['GET', 'POST', 'PATCH']);
 
 /** Only our own pages (loaded from disk) may use the IPC API. */

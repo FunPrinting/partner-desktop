@@ -16,13 +16,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onSignedOut: (cb) => listen('signed-out', cb),
   onStatus: (cb) => listen('status', cb),
 
-  // Partner web API (/api/partner/... only); resolves { ok, status, data }
+  // Partner web API (/api/partner/... & /api/chat/...); resolves { ok, status, data }
   api: (method, path, body) => ipcRenderer.invoke('api:request', { method, path, body }),
   // code: the customer's 4-digit delivery code, needed when the shop delivers itself
-  updateOrderStatus: (orderId, status, code) =>
-    ipcRenderer.invoke('api:request', { method: 'PATCH', path: `/api/partner/orders/${encodeURIComponent(orderId)}`, body: code === undefined ? { status } : { status, code } }),
+  updateOrderStatus: (orderId, status, code, cashCollected) => {
+    const body = { status };
+    if (code !== undefined) body.code = code;
+    if (cashCollected) body.cashCollected = true;
+    return ipcRenderer.invoke('api:request', { method: 'PATCH', path: `/api/partner/orders/${encodeURIComponent(orderId)}`, body });
+  },
   bookCourier: (orderId) =>
     ipcRenderer.invoke('api:request', { method: 'POST', path: `/api/partner/orders/${encodeURIComponent(orderId)}/ship` }),
+  onChatMessage: (cb) => listen('chat-message', cb),
 
   // Print jobs
   getJobs: () => ipcRenderer.invoke('jobs:get'),

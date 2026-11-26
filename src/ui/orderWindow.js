@@ -8,7 +8,7 @@
   document.documentElement.classList.add(params.get('platform') || 'platform-other');
 
   const LABEL = ORDER_STATUS_LABEL;
-  const TONE = { completed: 'success', delivered: 'success', ready_for_pickup: 'warning', printed: 'warning', printing: 'info', processing: 'info', cancelled: 'danger', refunded: 'danger' };
+  const TONE = { completed: 'success', delivered: 'success', ready_for_pickup: 'warning', printed: 'warning', pending_cod_approval: 'warning', printing: 'info', processing: 'info', cancelled: 'danger', refunded: 'danger' };
 
   let order = null;
   let fileIndex = 0;
@@ -49,7 +49,10 @@
   function render() {
     document.title = `Order ${order.orderId}`;
     $('title').textContent = `Order ${order.orderId}`;
-    $('pills').innerHTML = pill(LABEL[order.status] || order.status, TONE[order.status] || 'neutral') + pill(fulfilmentLabel(order));
+    $('pills').innerHTML =
+      pill(LABEL[order.status] || order.status, TONE[order.status] || 'neutral') +
+      pill(fulfilmentLabel(order)) +
+      (order.paymentMethod === 'cod' ? pill(order.paymentStatus === 'completed' ? 'Cash paid' : 'Cash COD', order.paymentStatus === 'completed' ? 'success' : 'warning') : '');
     const o = order.printingOptions || {};
     $('summary').innerHTML = kv([
       ['Placed', order.createdAt ? new Date(order.createdAt).toLocaleString() : ''],
@@ -59,14 +62,16 @@
       ['Sides', o.sided === 'double' ? 'Double-sided' : 'Single-sided'],
       ['Copies', o.copies || 1],
       ['Pages', o.pageCount],
+      ['Payment', order.paymentMethod === 'cod' ? (order.paymentStatus === 'completed' ? 'Cash on Pickup (Paid)' : 'Cash on Pickup (Due)') : 'Razorpay Online'],
       ['Order total', typeof order.amount === 'number' ? money(order.amount, 2) : ''],
       ['Your share', typeof order.amount === 'number' ? money(partnerShare(order), 2) : ''],
       ['Printed on', printedOn(order)],
     ]);
     const d = order.deliveryOption || {};
     const how = fulfilmentOf(order);
+    const slotStr = d.scheduledSlot?.date ? `${d.scheduledSlot.date}${d.scheduledSlot.label ? ` · ${d.scheduledSlot.label}` : ''}` : '';
     $('delivery').innerHTML = how === 'pickup'
-      ? kv([['How', 'Customer collects from your shop'], ['Delivery point', d.partnerDeliveryPoint]])
+      ? kv([['How', 'Customer collects from your shop'], ['Delivery point', d.partnerDeliveryPoint], ['Pickup slot', slotStr]])
       : kv([
           ['How', how === 'shop' ? 'You deliver' : 'Courier from your shop'],
           ['Recipient', [d.recipientName, d.recipientPhone].filter(Boolean).join(' · ')],
@@ -82,11 +87,19 @@
       ['Email', order.customerInfo?.email],
     ]);
     const next = nextStatuses(order);
-    $('status-actions').innerHTML = canBookCourier(order)
-      ? `<button class="btn btn-primary" data-book="1">${icon('truck', 'icon-sm')}Book courier pickup</button>`
-      : next.length
-        ? next.map((s, i) => `<button class="btn ${i === 0 ? 'btn-primary' : ''}" data-status="${esc(s)}">${i === 0 ? icon('check', 'icon-sm') : ''}${esc(LABEL[s])}</button>`).join('')
-        : `<p class="muted">${how === 'courier' && order.shiprocket?.awbCode ? 'The courier collects it from your shop. Tracking updates the status.' : 'Nothing more to do for this order.'}</p>`;
+    if (order.paymentMethod === 'cod' && order.status === 'pending_cod_approval') {
+      $('status-actions').innerHTML = `
+        <button class="btn" data-cod="decline">Decline COD</button>
+        <button class="btn btn-primary" data-cod="approve">${icon('check', 'icon-sm')}Approve &amp; Print</button>`;
+    } else {
+      const canNoShow = order.paymentMethod === 'cod' && order.paymentStatus !== 'completed' && !['completed', 'cancelled', 'refunded'].includes(order.status);
+      const primary = canBookCourier(order)
+        ? `<button class="btn btn-primary" data-book="1">${icon('truck', 'icon-sm')}Book courier pickup</button>`
+        : next.length
+          ? next.map((s, i) => `<button class="btn ${i === 0 ? 'btn-primary' : ''}" data-status="${esc(s)}">${i === 0 ? icon('check', 'icon-sm') : ''}${esc(LABEL[s])}</button>`).join('')
+          : `<p class="muted">${how === 'courier' && order.shiprocket?.awbCode ? 'The courier collects it from your shop. Tracking updates the status.' : 'Nothing more to do for this order.'}</p>`;
+      $('status-actions').innerHTML = primary + (canNoShow ? ` <button class="btn btn-danger" data-cod="no_show">Mark No-Show</button>` : '');
+    }
     renderPreview();
   }
 
@@ -98,10 +111,14 @@
   });
 
   $('status-actions').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-status], [data-book]');
+    const b = e.target.closest('[data-status], [data-book], [data-cod]');
     if (!b || !order) return;
     setBusy(b, true);
-    const updated = b.dataset.book ? await bookCourierFor(order) : await moveOrder(order, b.dataset.status);
+    const updated = b.dataset.cod
+      ? await codActionFor(order, b.dataset.cod)
+      : b.dataset.book
+        ? await bookCourierFor(order)
+        : await moveOrder(order, b.dataset.status);
     setBusy(b, false);
     if (updated) {
       order = { ...order, ...updated };

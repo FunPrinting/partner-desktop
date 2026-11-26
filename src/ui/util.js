@@ -135,7 +135,7 @@ function playChime() {
 // ── Order fulfilment (same rules as the server, src/lib/partnerOrderTransitions.ts) ──
 
 const ORDER_STATUS_LABEL = {
-  pending_payment: 'Awaiting payment', paid: 'Paid', processing: 'Processing', printing: 'Printing', printed: 'Printed',
+  pending_payment: 'Awaiting payment', pending_cod_approval: 'Confirm COD in chat', paid: 'Paid', processing: 'Processing', printing: 'Printing', printed: 'Printed',
   ready_for_pickup: 'Ready for pickup', dispatched: 'Out for delivery', delivered: 'Delivered', completed: 'Collected',
   cancelled: 'Cancelled', refunded: 'Refunded',
 };
@@ -168,26 +168,37 @@ function canBookCourier(order) {
   return fulfilmentOf(order) === 'courier' && order.status === 'printed' && !order.shiprocket?.awbCode;
 }
 
-/** 90% of the printing, plus the whole delivery fee when the shop delivers itself. */
+/** 90% of printing on online orders (plus self delivery fee), or 100% cash kept for COD orders. */
 function partnerShare(order) {
   const amount = Number(order?.amount || 0);
+  if (order?.paymentMethod === 'cod') return Math.round(amount * 100) / 100;
   const delivery = order?.deliveryOption?.type === 'delivery' ? Number(order.deliveryOption.deliveryCharge || 0) : 0;
   return Math.round(((amount - delivery) * 0.9 + (fulfilmentOf(order) === 'shop' ? delivery : 0)) * 100) / 100;
 }
 
 /**
- * Moves an order, asking for the customer's delivery code when needed.
+ * Moves an order, asking for the customer's delivery code or COD cash confirmation when needed.
  * Resolves the updated order, or null if cancelled or failed (the error is shown).
  */
 async function moveOrder(order, status) {
   let code;
+  let cashCollected = false;
   if (status === 'delivered' && fulfilmentOf(order) === 'shop') {
     code = await ask({ title: `Delivered order ${order.orderId}?`, message: 'Ask the customer for the 4-digit delivery code shown in their order.', ok: 'Confirm delivery', input: { label: 'Delivery code', placeholder: '0000' } });
     if (code === null) return null;
     code = code.replace(/\D/g, '');
   }
+  if (status === 'completed' && order?.paymentMethod === 'cod' && order?.paymentStatus !== 'completed') {
+    const confirmed = await ask({
+      title: `Confirm cash payment for ${order.orderId}`,
+      message: `Ask the customer to scan the Order Summary QR slip to auto-complete, or confirm you collected ₹${Math.round(order.amount || 0)} cash at the counter.`,
+      ok: `Cash ₹${Math.round(order.amount || 0)} received`,
+    });
+    if (!confirmed) return null;
+    cashCollected = true;
+  }
   for (;;) {
-    const result = await window.electronAPI.updateOrderStatus(order.orderId, status, code);
+    const result = await window.electronAPI.updateOrderStatus(order.orderId, status, code, cashCollected);
     if (result.ok) {
       toast(`Order ${order.orderId}: ${ORDER_STATUS_LABEL[status] || status}.`);
       return result.data.order || { ...order, status };
@@ -212,6 +223,30 @@ async function bookCourierFor(order) {
     return null;
   }
   toast(`Courier booked: ${result.data.courierName}, AWB ${result.data.awbCode}.`);
+  return result.data.order || order;
+}
+
+async function codActionFor(order, action, reason) {
+  if (action === 'no_show') {
+    const ok = await ask({
+      title: `Mark ${order.orderId} as No-Show?`,
+      message: 'This cancels the COD order and automatically blocks future Cash on Pickup for this customer.',
+      ok: 'Mark No-Show',
+    });
+    if (!ok) return null;
+  }
+  const result = await window.electronAPI.api('POST', `/api/partner/orders/${encodeURIComponent(order.orderId)}/cod`, reason ? { action, reason } : { action });
+  if (!result.ok || !result.data?.success) {
+    await ask({ title: 'COD action failed', message: result.data?.error || `Error ${result.status}`, cancel: null });
+    return null;
+  }
+  toast(
+    action === 'approve'
+      ? `COD #${order.orderId} approved & queued to print.`
+      : action === 'no_show'
+        ? `Order #${order.orderId} marked No-Show.`
+        : `COD request #${order.orderId} declined.`
+  );
   return result.data.order || order;
 }
 

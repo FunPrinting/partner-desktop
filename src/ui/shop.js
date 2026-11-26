@@ -68,6 +68,10 @@ function initShop() {
     if (delivSelfBody) delivSelfBody.classList.toggle('hidden', !$('set-delivery-self-enabled')?.checked);
     const delivCourierBody = $('delivery-courier-body');
     if (delivCourierBody) delivCourierBody.classList.toggle('hidden', !$('set-delivery-courier-enabled')?.checked);
+
+    // 8. COD
+    const codBody = $('cod-body');
+    if (codBody) codBody.classList.toggle('hidden', !$('set-cod-enabled')?.checked);
   }
 
   form.addEventListener('input', () => setDirty(true));
@@ -141,6 +145,43 @@ function initShop() {
   });
   $('add-dp-btn').addEventListener('click', () => {
     addDeliveryPoint();
+    setDirty(true);
+  });
+
+  function addSlot(slot = {}) {
+    const box = $('slots-container');
+    box.querySelector('.hint')?.remove();
+    const card = document.createElement('div');
+    card.className = 'card card-pad slot-item';
+    card.dataset.slotId = slot.id || `slot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    card.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="field" style="flex:1"><label>Target</label><select class="select slot-target"><option value="store">Main Store</option><option value="pickup_point">Pickup Point</option></select></div>
+        <div class="field slot-point-wrap" style="flex:1"><label>Pickup point name</label><input class="input slot-point" placeholder="Exact point name"></div>
+      </div>
+      <div class="grid-3">
+        <div class="field"><label>Start (HH:MM)</label><input class="input slot-start" placeholder="10:00"></div>
+        <div class="field"><label>End (HH:MM)</label><input class="input slot-end" placeholder="12:00"></div>
+        <div class="field"><label>Label (optional)</label><input class="input slot-label" placeholder="10:00 AM – 12:00 PM"></div>
+      </div>
+      <div class="row" style="padding:4px 0 0"><div class="row-main"><div class="row-title">Active</div></div><label class="switch"><input type="checkbox" class="slot-active"><span></span></label></div>`;
+    const targetSel = card.querySelector('.slot-target');
+    const pointWrap = card.querySelector('.slot-point-wrap');
+    targetSel.value = slot.target === 'pickup_point' ? 'pickup_point' : 'store';
+    card.querySelector('.slot-point').value = slot.pickupPointName || '';
+    card.querySelector('.slot-start').value = slot.startTime || '10:00';
+    card.querySelector('.slot-end').value = slot.endTime || '12:00';
+    card.querySelector('.slot-label').value = slot.label || '';
+    card.querySelector('.slot-active').checked = slot.isActive !== false;
+    const syncPointVis = () => pointWrap.classList.toggle('hidden', targetSel.value !== 'pickup_point');
+    targetSel.addEventListener('change', syncPointVis);
+    syncPointVis();
+    card.firstElementChild.appendChild(removeButton('Remove slot', () => card.remove()));
+    box.appendChild(card);
+  }
+
+  $('add-slot-btn')?.addEventListener('click', () => {
+    addSlot();
     setDirty(true);
   });
 
@@ -311,6 +352,21 @@ function initShop() {
     }
     $('dp-container').innerHTML = '';
     (p.deliveryPoints || []).forEach((dp) => addDeliveryPoint(dp));
+
+    // COD, AI Assistant & Schedule Slots
+    if ($('set-cod-enabled')) $('set-cod-enabled').checked = Boolean(p.cod?.enabled);
+    if ($('set-cod-allow-points')) $('set-cod-allow-points').checked = Boolean(p.cod?.allowAtPickupPoints);
+    if ($('set-cod-max-amount')) $('set-cod-max-amount').value = p.cod?.maxOrderAmount ?? 200;
+    if ($('set-cod-cash-fee')) $('set-cod-cash-fee').value = p.cod?.cashFee ?? 0;
+    if ($('set-ai-enabled')) $('set-ai-enabled').checked = p.aiAssistant?.enabled !== false;
+    if ($('set-ai-pause-mins')) $('set-ai-pause-mins').value = p.aiAssistant?.autoPauseMinutes ?? 45;
+    if ($('set-ai-faq-notes')) $('set-ai-faq-notes').value = p.aiAssistant?.faqNotes || '';
+    if ($('slots-container')) {
+      $('slots-container').innerHTML = '';
+      (p.scheduleSlots || []).forEach((s) => addSlot(s));
+      if (!(p.scheduleSlots || []).length) $('slots-container').innerHTML = '<p class="hint">Default store windows are active. Click Add slot to customize.</p>';
+    }
+
     subtitle.textContent = p.businessName ? `${p.businessName} · what customers see` : 'Profile, prices and location customers see.';
 
     // Synchronise capability-driven visibility
@@ -450,6 +506,36 @@ function initShop() {
           location: point(c.querySelector('.dp-lat').value, c.querySelector('.dp-lng').value),
         }))
         .filter((d) => d.name),
+      cod: {
+        enabled: Boolean($('set-cod-enabled')?.checked),
+        allowAtPickupPoints: Boolean($('set-cod-allow-points')?.checked),
+        maxOrderAmount: Math.min(1000, Math.max(50, Math.round(num('set-cod-max-amount', 200)))),
+        cashFee: Math.min(50, Math.max(0, Math.round(num('set-cod-cash-fee', 0)))),
+      },
+      aiAssistant: {
+        enabled: $('set-ai-enabled') ? Boolean($('set-ai-enabled').checked) : true,
+        autoPauseMinutes: Math.min(240, Math.max(5, Math.round(num('set-ai-pause-mins', 45)))),
+        faqNotes: ($('set-ai-faq-notes')?.value || '').trim(),
+      },
+      scheduleSlots: [...document.querySelectorAll('#slots-container .slot-item')]
+        .map((c) => {
+          const target = c.querySelector('.slot-target').value === 'pickup_point' ? 'pickup_point' : 'store';
+          const pickupPointName = c.querySelector('.slot-point').value.trim();
+          const startTime = c.querySelector('.slot-start').value.trim();
+          const endTime = c.querySelector('.slot-end').value.trim();
+          const label = c.querySelector('.slot-label').value.trim();
+          return {
+            id: c.dataset.slotId,
+            target,
+            ...(target === 'pickup_point' && pickupPointName ? { pickupPointName } : {}),
+            ...(label ? { label } : {}),
+            startTime,
+            endTime,
+            cutoffMinutes: 30,
+            isActive: c.querySelector('.slot-active').checked,
+          };
+        })
+        .filter((s) => /^\d{2}:\d{2}$/.test(s.startTime) && /^\d{2}:\d{2}$/.test(s.endTime) && s.endTime > s.startTime),
     };
     setBusy(saveBtn, true, 'Saving');
     const { data } = await window.electronAPI.api('POST', '/api/partner/profile', payload);
