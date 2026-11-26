@@ -91,7 +91,7 @@ async function renderSummary(job, order = {}) {
   const qrY = H - M - qrSize + 10;
 
   try {
-    const qr = QRCode.create(`${WEB_URL}/orders/${encodeURIComponent(job.orderId)}`, { errorCorrectionLevel: 'M' });
+    const qr = QRCode.create(`${WEB_URL}/orders/${encodeURIComponent(job.orderId)}?scan=qr`, { errorCorrectionLevel: 'M' });
     const count = qr.modules.size;
     const cell = qrSize / count;
     for (let r = 0; r < count; r++) {
@@ -163,7 +163,9 @@ async function renderSummary(job, order = {}) {
 
   // Total Amount
   if (amt !== undefined) {
-    text(`Total Amount: Rs ${amt} (Paid)`, { size: 12, font: bold });
+    const isCodPending = order.paymentMethod === 'cod' && order.paymentStatus !== 'completed';
+    const amtNote = isCodPending ? 'CASH ON PICKUP - COLLECT CASH' : order.paymentMethod === 'cod' ? 'Cash Paid' : 'Paid';
+    text(`Total Amount: Rs ${amt} (${amtNote})`, { size: 12, font: bold });
     y -= 16;
   }
 
