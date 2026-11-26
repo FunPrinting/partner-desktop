@@ -112,6 +112,50 @@ function initShop() {
     box.appendChild(row);
   }
 
+  let activePinTarget = null;
+
+  function populatePointSelect(sel, preferred) {
+    const current = preferred !== undefined ? preferred : sel.value || '*';
+    const names = [...document.querySelectorAll('#dp-container .dp .dp-name')]
+      .map((el) => el.value.trim())
+      .filter(Boolean);
+    const unique = [...new Set(names)];
+    const opts = [{ value: '*', label: 'All pickup points' }, ...unique.map((n) => ({ value: n, label: n }))];
+    if (current && current !== '*' && !unique.includes(current)) {
+      opts.push({ value: current, label: `${current} (custom)` });
+    }
+    sel.innerHTML = opts.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+    sel.value = current || '*';
+  }
+
+  function syncSlotPointDropdowns() {
+    document.querySelectorAll('#slots-container .slot-point').forEach((sel) => populatePointSelect(sel));
+  }
+
+  function setActivePinTarget(next) {
+    activePinTarget = next;
+    if (next) {
+      const lat = parseFloat(next.card.querySelector('.dp-lat').value);
+      const lng = parseFloat(next.card.querySelector('.dp-lng').value);
+      if (map && !isNaN(lat) && !isNaN(lng)) {
+        marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], Math.max(map.getZoom(), 15));
+      }
+      toast(`Map clicks now update "${next.nameEl.value.trim() || 'this pickup point'}". Click "Done" when finished.`);
+      $('shop-map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      const lat = parseFloat($('set-lat').value);
+      const lng = parseFloat($('set-lng').value);
+      if (map && !isNaN(lat) && !isNaN(lng)) {
+        marker.setLatLng([lat, lng]);
+      }
+    }
+    document.querySelectorAll('#dp-container .dp-pick').forEach((btn) => {
+      const isMe = activePinTarget && btn.closest('.dp') === activePinTarget.card;
+      btn.textContent = isMe ? 'Done picking' : 'Pick on map';
+    });
+  }
+
   function addDeliveryPoint(dp = {}) {
     const box = $('dp-container');
     const card = document.createElement('div');
@@ -125,18 +169,34 @@ function initShop() {
         <div class="field"><label>Latitude</label><input class="input dp-lat" type="number" step="any"></div>
         <div class="field"><label>Longitude</label><input class="input dp-lng" type="number" step="any"></div>
       </div>
-      <div><button type="button" class="btn btn-plain dp-here">${icon('pin', 'icon-sm')}Use the shop's map pin</button></div>`;
-    card.querySelector('.dp-name').value = dp.name || '';
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-plain dp-pick">${icon('pin', 'icon-sm')}Pick on map</button>
+        <button type="button" class="btn btn-plain dp-here">Use the shop's map pin</button>
+      </div>`;
+    const nameEl = card.querySelector('.dp-name');
+    nameEl.value = dp.name || '';
     card.querySelector('.dp-contact').value = dp.contactNumber || '';
     card.querySelector('.dp-lat').value = dp.location?.coordinates?.[1] ?? $('set-lat').value;
     card.querySelector('.dp-lng').value = dp.location?.coordinates?.[0] ?? $('set-lng').value;
+    nameEl.addEventListener('input', syncSlotPointDropdowns);
+    card.querySelector('.dp-pick').addEventListener('click', () => {
+      if (activePinTarget?.card === card) setActivePinTarget(null);
+      else setActivePinTarget({ card, nameEl });
+    });
     card.querySelector('.dp-here').addEventListener('click', () => {
       card.querySelector('.dp-lat').value = $('set-lat').value;
       card.querySelector('.dp-lng').value = $('set-lng').value;
       setDirty(true);
     });
-    card.firstElementChild.appendChild(removeButton('Remove delivery point', () => card.remove()));
+    card.firstElementChild.appendChild(
+      removeButton('Remove delivery point', () => {
+        if (activePinTarget?.card === card) setActivePinTarget(null);
+        card.remove();
+        syncSlotPointDropdowns();
+      })
+    );
     box.appendChild(card);
+    syncSlotPointDropdowns();
   }
 
   $('add-phone-btn').addEventListener('click', () => {
@@ -157,7 +217,7 @@ function initShop() {
     card.innerHTML = `
       <div style="display:flex;gap:8px;align-items:flex-end">
         <div class="field" style="flex:1"><label>Target</label><select class="select slot-target"><option value="store">Main Store</option><option value="pickup_point">Pickup Point</option></select></div>
-        <div class="field slot-point-wrap" style="flex:1"><label>Pickup point name</label><input class="input slot-point" placeholder="Exact point name"></div>
+        <div class="field slot-point-wrap" style="flex:1"><label>Pickup point</label><select class="select slot-point"></select></div>
       </div>
       <div class="grid-3">
         <div class="field"><label>Start (HH:MM)</label><input class="input slot-start" placeholder="10:00"></div>
@@ -167,8 +227,9 @@ function initShop() {
       <div class="row" style="padding:4px 0 0"><div class="row-main"><div class="row-title">Active</div></div><label class="switch"><input type="checkbox" class="slot-active"><span></span></label></div>`;
     const targetSel = card.querySelector('.slot-target');
     const pointWrap = card.querySelector('.slot-point-wrap');
+    const pointSel = card.querySelector('.slot-point');
     targetSel.value = slot.target === 'pickup_point' ? 'pickup_point' : 'store';
-    card.querySelector('.slot-point').value = slot.pickupPointName || '';
+    populatePointSelect(pointSel, slot.pickupPointName || '*');
     card.querySelector('.slot-start').value = slot.startTime || '10:00';
     card.querySelector('.slot-end').value = slot.endTime || '12:00';
     card.querySelector('.slot-label').value = slot.label || '';
@@ -188,8 +249,15 @@ function initShop() {
   // ── Map ─────────────────────────────────────────────────────────────
 
   function setPin(lat, lng, zoom) {
-    $('set-lat').value = Number(lat).toFixed(6);
-    $('set-lng').value = Number(lng).toFixed(6);
+    const fLat = Number(lat).toFixed(6);
+    const fLng = Number(lng).toFixed(6);
+    if (activePinTarget) {
+      activePinTarget.card.querySelector('.dp-lat').value = fLat;
+      activePinTarget.card.querySelector('.dp-lng').value = fLng;
+    } else {
+      $('set-lat').value = fLat;
+      $('set-lng').value = fLng;
+    }
     if (map) {
       marker.setLatLng([lat, lng]);
       map.setView([lat, lng], zoom || map.getZoom());

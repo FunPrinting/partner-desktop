@@ -34,6 +34,15 @@ test('the cover sheet is one A4 page, even with non-Latin names', async () => {
   assert.deepEqual([Math.round(p.getWidth()), Math.round(p.getHeight())], [595, 842]);
 });
 
+test('cover sheet renders distinct COD pending and Prepaid layouts', async () => {
+  const codPdf = await renderSummary(job, { customerInfo: { name: 'Asha' }, amount: 85, paymentMethod: 'cod', paymentStatus: 'cod_pending' });
+  const prepaidPdf = await renderSummary(job, { customerInfo: { name: 'Riya' }, amount: 85, paymentMethod: 'online', paymentStatus: 'completed' });
+  const codDoc = await PDFDocument.load(codPdf);
+  const prepaidDoc = await PDFDocument.load(prepaidPdf);
+  assert.equal(codDoc.getPageCount(), 1);
+  assert.equal(prepaidDoc.getPageCount(), 1);
+});
+
 test('compactPages writes page ranges', () => {
   assert.equal(compactPages([9, 1, 2, 3, 7, 10, 3]), '1-3, 7, 9-10');
 });

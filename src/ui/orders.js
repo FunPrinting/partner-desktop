@@ -96,7 +96,9 @@ function initOrders() {
             </td>
             <td class="num">
               ${esc(money(partnerShare(o), 2))}
-              ${o.paymentMethod === 'cod' ? `<div class="small">${o.paymentStatus === 'completed' ? 'Cash paid' : 'Cash COD'}</div>` : ''}
+              <div class="small ${o.paymentMethod === 'cod' && o.paymentStatus !== 'completed' ? '' : 'muted'}">${
+                o.paymentMethod === 'cod' ? (o.paymentStatus === 'completed' ? 'COD · Cash paid' : 'COD · Collect cash') : 'Prepaid'
+              }</div>
             </td>
             <td>${pill(ORDER_STATUS_LABEL[o.status] || o.status, statusTone(o.status))}</td>
             <td style="width:190px">${action}</td>
